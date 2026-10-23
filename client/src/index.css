@@ -284,7 +284,7 @@
    5. SCROLLBAR
 ========================================= */
 
-* {
+/* * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-strong) transparent;
 }
@@ -305,7 +305,7 @@
 
 *::-webkit-scrollbar-thumb:hover {
   background: var(--color-muted);
-}
+} */
 
 /* =========================================
    6. RESPONSIVE TOKENS

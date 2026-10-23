@@ -49,7 +49,7 @@ export default function HeroSection() {
             that fits your world.
           </motion.h1>
 
-          <p className="mt-4 max-w-[470px] text-sm leading-6 text-[var(--color-muted)] sm:text-base sm:leading-7">
+          <p className="mt-4 max-w-[470px] text-sm leading-6 text-[#2c2c2c] sm:text-base sm:leading-7">
             Latest iPhones, Samsung, Google and more — new, UK-used and
             refurbished phones at great prices, with verified quality and
             nationwide delivery.
