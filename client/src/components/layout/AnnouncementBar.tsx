@@ -40,7 +40,7 @@ export default function AnnouncementBar({
 
   return (
     <div className="relative z-[31] border-b border-white/30 bg-[var(--color-accent)] text-white">
-      <div className="mx-auto flex h-[34px] w-full max-w-[var(--container-max)] items-center justify-between gap-3 px-3 sm:px-6">
+      <div className="mx-auto flex h-[34px] w-full page-container items-center justify-between gap-3 px-3 sm:px-6">
         {/* Desktop announcements */}
         <div className="hidden min-w-0 items-center gap-2 text-[10px] font-medium leading-none lg:flex">
           {messages.map((message, index) => (

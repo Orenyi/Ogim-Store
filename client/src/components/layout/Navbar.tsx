@@ -39,7 +39,7 @@ export default function Navbar({
   return (
     <>
       <header className="relative z-[30] w-full border-b border-[var(--color-border)] bg-white">
-        <div className="mx-auto flex h-[64px] w-full max-w-[var(--container-max)] items-center gap-3 px-3 sm:px-6 lg:h-[76px] lg:gap-6">
+        <div className="mx-auto flex h-[64px] w-full page-container items-center gap-3 px-3 sm:px-6 lg:h-[76px] lg:gap-6">
           {/* Mobile menu button */}
           <button
             type="button"
