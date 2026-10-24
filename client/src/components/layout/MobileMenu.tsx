@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   FiArrowRight,
@@ -14,6 +14,7 @@ import {
 } from "react-icons/fi";
 
 import ogimLogo from "../../assets/images/ogim_logo.webp";
+import SearchSuggestions from "../search/SearchSuggestions";
 
 type MobileMenuProps = {
   isOpen: boolean;
@@ -34,11 +35,19 @@ export default function MobileMenu({
   onClose,
   isAuthenticated = false,
 }: MobileMenuProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchWrapperRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
   useEffect(() => {
     if (!isOpen) return;
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onClose();
+        setSearchFocused(false);
+      }
     }
 
     const previousOverflow = document.body.style.overflow;
@@ -50,6 +59,23 @@ export default function MobileMenu({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchFocused(false);
+    }
+  }, [isOpen]);
+
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    setSearchFocused(false);
+    onClose();
+    navigate(`/search?q=${encodeURIComponent(query)}`);
+  }
 
   return (
     <AnimatePresence>
@@ -80,6 +106,7 @@ export default function MobileMenu({
               ease: [0.2, 0, 0, 1],
             }}
           >
+            {/* Drawer header */}
             <div className="flex min-h-[68px] items-center justify-between border-b border-[var(--color-border)] px-5">
               <Link to="/" onClick={onClose} aria-label="Ogim Store home">
                 <img
@@ -99,29 +126,76 @@ export default function MobileMenu({
               </button>
             </div>
 
-            <form
-              role="search"
-              action="/search"
-              method="get"
-              className="mx-5 mt-5 flex h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--color-border)] bg-[var(--color-paper)] px-3 focus-within:border-[var(--color-accent)]"
-            >
-              <FiSearch
-                size={17}
-                className="shrink-0 text-[var(--color-muted)]"
-                aria-hidden="true"
-              />
-              <input
-                name="q"
-                type="search"
-                placeholder="Search phones..."
-                aria-label="Search phones"
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-              />
-              <button type="submit" className="sr-only">
-                Search
-              </button>
-            </form>
+            {/* Mobile search and suggestions */}
+            <div ref={searchWrapperRef} className="relative mx-5 mt-5">
+              <form
+                role="search"
+                onSubmit={submitSearch}
+                className={[
+                  "flex h-11 items-center gap-2 rounded-[var(--radius-control)] border bg-[var(--color-paper)] px-3 transition-colors",
+                  searchFocused
+                    ? "border-[var(--color-accent)]"
+                    : "border-[var(--color-border)]",
+                ].join(" ")}
+              >
+                <FiSearch
+                  size={17}
+                  className="shrink-0 text-[var(--color-muted)]"
+                  aria-hidden="true"
+                />
 
+                <label htmlFor="mobile-menu-search" className="sr-only">
+                  Search phones
+                </label>
+
+                <input
+                  id="mobile-menu-search"
+                  name="q"
+                  type="search"
+                  autoComplete="off"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onFocus={() => setSearchFocused(true)}
+                  placeholder="Search phones..."
+                  aria-expanded={searchFocused && Boolean(searchQuery.trim())}
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                />
+
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => setSearchQuery("")}
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[var(--color-muted)] hover:text-[var(--color-accent)]"
+                  >
+                    <FiX size={15} aria-hidden="true" />
+                  </button>
+                )}
+
+                <button
+                  type="submit"
+                  aria-label="Submit search"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[var(--color-muted)] hover:text-[var(--color-accent)]"
+                >
+                  <FiSearch size={16} aria-hidden="true" />
+                </button>
+              </form>
+
+              {searchFocused && searchQuery.trim() && (
+                <div className="absolute inset-x-0 top-full z-[60] mt-2">
+                  <SearchSuggestions
+                    query={searchQuery}
+                    mobile
+                    onSelect={() => {
+                      setSearchFocused(false);
+                      onClose();
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Main navigation */}
             <nav aria-label="Mobile navigation" className="px-3 py-5">
               <p className="px-3 pb-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-muted)]">
                 Explore Ogim Store
@@ -156,6 +230,7 @@ export default function MobileMenu({
               </div>
             </nav>
 
+            {/* Account */}
             <div className="mx-5 border-t border-[var(--color-border)] pt-4">
               <Link
                 to={isAuthenticated ? "/account" : "/login"}
@@ -170,6 +245,7 @@ export default function MobileMenu({
               </Link>
             </div>
 
+            {/* Trust footer */}
             <div className="mt-auto bg-[var(--color-paper)] p-5">
               <p className="text-sm font-semibold text-[var(--color-ink)]">
                 Shop with confidence

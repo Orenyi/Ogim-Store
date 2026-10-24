@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { FiMenu, FiSearch, FiShoppingCart, FiUser } from "react-icons/fi";
+import { FiMenu, FiSearch, FiShoppingCart, FiUser, FiX } from "react-icons/fi";
 
 import ogimLogo from "../../assets/images/ogim_logo.webp";
 import MobileMenu from "./MobileMenu";
+import SearchSuggestions from "../search/SearchSuggestions";
 
 type NavbarProps = {
   cartCount?: number;
@@ -23,8 +24,35 @@ export default function Navbar({
 }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
+  const searchWrapperRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    function handleOutsidePointer(event: PointerEvent) {
+      if (
+        searchWrapperRef.current &&
+        !searchWrapperRef.current.contains(event.target as Node)
+      ) {
+        setIsSearchFocused(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsSearchFocused(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handleOutsidePointer);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointer);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -32,14 +60,15 @@ export default function Navbar({
     const query = searchQuery.trim();
     if (!query) return;
 
-    navigate(`/search?q=${encodeURIComponent(query)}`);
+    setIsSearchFocused(false);
     setIsMenuOpen(false);
+    navigate(`/search?q=${encodeURIComponent(query)}`);
   }
 
   return (
     <>
       <header className="relative z-[30] w-full border-b border-[var(--color-border)] bg-white">
-        <div className="mx-auto flex h-[64px] w-full page-container items-center gap-3 px-3 sm:px-6 lg:h-[76px] lg:gap-6">
+        <div className="page-container mx-auto flex h-[64px] w-full items-center gap-3 px-3 sm:px-6 lg:h-[76px] lg:gap-6">
           {/* Mobile menu button */}
           <button
             type="button"
@@ -85,29 +114,65 @@ export default function Navbar({
             ))}
           </nav>
 
-          {/* Desktop search */}
-          <form
-            role="search"
-            onSubmit={submitSearch}
-            className="ml-auto hidden h-10 min-w-0 max-w-[360px] flex-1 items-center gap-2 rounded-full border border-transparent bg-[var(--color-paper)] px-4 transition-colors focus-within:border-[var(--color-accent)] md:flex"
+          {/* Desktop search with suggestions */}
+          <div
+            ref={searchWrapperRef}
+            className="relative ml-auto hidden min-w-0 max-w-[360px] flex-1 md:block"
           >
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search for iPhone, Samsung..."
-              aria-label="Search phones"
-              className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-[var(--color-muted)]"
-            />
-
-            <button
-              type="submit"
-              aria-label="Search"
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[var(--color-muted)] hover:text-[var(--color-accent)]"
+            <form
+              role="search"
+              onSubmit={submitSearch}
+              className={[
+                "flex h-10 items-center gap-2 rounded-full border bg-[var(--color-paper)] px-4 transition-colors",
+                isSearchFocused
+                  ? "border-[var(--color-accent)]"
+                  : "border-transparent",
+              ].join(" ")}
             >
-              <FiSearch size={16} aria-hidden="true" />
-            </button>
-          </form>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setIsSearchFocused(false);
+                  }
+                }}
+                placeholder="Search for iPhone, Samsung..."
+                aria-label="Search phones"
+                aria-expanded={isSearchFocused && Boolean(searchQuery.trim())}
+                aria-controls="navbar-search-suggestions"
+                autoComplete="off"
+                className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-[var(--color-muted)]"
+              />
+
+              {searchQuery && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => setSearchQuery("")}
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[var(--color-muted)] hover:text-[var(--color-accent)]"
+                >
+                  <FiX size={14} aria-hidden="true" />
+                </button>
+              )}
+
+              <button
+                type="submit"
+                aria-label="Search"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[var(--color-muted)] hover:text-[var(--color-accent)]"
+              >
+                <FiSearch size={16} aria-hidden="true" />
+              </button>
+            </form>
+
+            {isSearchFocused && searchQuery.trim() && (
+              <div id="navbar-search-suggestions">
+                <SearchSuggestions query={searchQuery} />
+              </div>
+            )}
+          </div>
 
           {/* Account and cart */}
           <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0 md:gap-2">
