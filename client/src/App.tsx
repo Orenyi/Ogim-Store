@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import StoreLayout from "./components/layout/StoreLayout";
 import Homepage from "./pages/Homepage";
+import ShopPage from "./pages/ShopPage";
 // import ComponentPreview from "./pages/ComponentPreview";
 // import NavbarPreview from "./pages/NavbarPreview";
 
@@ -10,6 +11,7 @@ export default function App() {
     <Routes>
       <Route element={<StoreLayout />}>
         <Route path="/" element={<Homepage />} />
+        <Route path="/shop" element={<ShopPage />} />
 
         {/* Keep these preview routes temporarily if you still use them.
         <Route path="/component-preview" element={<ComponentPreview />} />
