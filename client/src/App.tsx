@@ -4,6 +4,8 @@ import StoreLayout from "./components/layout/StoreLayout";
 import Homepage from "./pages/Homepage";
 import ShopPage from "./pages/ShopPage";
 import SearchResultsPage from "./pages/SearchResultsPage";
+import ProductDetailsPage from "./pages/ProductDetailsPage";
+
 // import ComponentPreview from "./pages/ComponentPreview";
 // import NavbarPreview from "./pages/NavbarPreview";
 
@@ -13,7 +15,8 @@ export default function App() {
       <Route element={<StoreLayout />}>
         <Route path="/" element={<Homepage />} />
         <Route path="/shop" element={<ShopPage />} />
-        <Route path="search" element={<SearchResultsPage />} />
+        <Route path="/search" element={<SearchResultsPage />} />
+        <Route path="/products/:slug" element={<ProductDetailsPage />} />
 
         {/* Keep these preview routes temporarily if you still use them.
         <Route path="/component-preview" element={<ComponentPreview />} />
