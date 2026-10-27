@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   FiAlertCircle,
   FiArrowRight,
@@ -14,6 +14,7 @@ import FormField from "./FormField";
 import PasswordRequirements, {
   getPasswordRequirements,
 } from "./PasswordRequirements";
+import { useAuth } from "../../context/AuthContext";
 
 interface RegisterValues {
   fullName: string;
@@ -88,6 +89,21 @@ function validateForm(values: RegisterValues): RegisterErrors {
 }
 
 export default function RegisterForm() {
+  const { register } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Preserve the destination when arriving from a protected route.
+  const requestedDestination: unknown = location.state?.from;
+
+  const returnTo =
+    typeof requestedDestination === "string" &&
+    requestedDestination.startsWith("/") &&
+    !requestedDestination.startsWith("//") &&
+    !requestedDestination.startsWith("/\\")
+      ? requestedDestination
+      : "/";
+
   const [values, setValues] = useState<RegisterValues>(initialValues);
   const [errors, setErrors] = useState<RegisterErrors>({});
   const [showPassword, setShowPassword] = useState(false);
@@ -98,16 +114,12 @@ export default function RegisterForm() {
     field: K,
     value: RegisterValues[K],
   ) {
-    setValues((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    const nextValues = { ...values, [field]: value };
 
+    setValues(nextValues);
     setNotice("");
 
-    // Once the user submits, keep errors up to date as they correct fields.
     if (attemptedSubmit) {
-      const nextValues = { ...values, [field]: value };
       setErrors(validateForm(nextValues));
     } else {
       setErrors((current) => ({
@@ -119,6 +131,7 @@ export default function RegisterForm() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
     setAttemptedSubmit(true);
     setNotice("");
 
@@ -130,10 +143,11 @@ export default function RegisterForm() {
       return;
     }
 
-    // Frontend-only: intentionally no API request and no fake success.
-    setNotice(
-      "Your details are valid. Account creation will be available when registration is connected to the backend.",
-    );
+    // DEMO ONLY: this creates frontend auth state, not a real account.
+    register(values.fullName.trim(), values.email.trim());
+
+    // Return to the intended destination, or the homepage by default.
+    navigate(returnTo, { replace: true });
   }
 
   return (
@@ -150,6 +164,7 @@ export default function RegisterForm() {
           Already have an account?{" "}
           <Link
             to="/login"
+            state={location.state}
             className="font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
           >
             Sign in
@@ -332,8 +347,8 @@ export default function RegisterForm() {
         </button>
 
         <p className="text-xs leading-5 text-[var(--color-muted)]">
-          By continuing, you acknowledge that registration is not yet connected.
-          Your account will not be created at this stage.
+          Demo mode: registration is simulated in this browser session. No
+          account is created on a server.
         </p>
       </form>
 
