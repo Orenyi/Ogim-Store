@@ -6,9 +6,7 @@ import ShopPage from "./pages/ShopPage";
 import SearchResultsPage from "./pages/SearchResultsPage";
 import ProductDetailsPage from "./pages/ProductDetailsPage";
 import CartPage from "./pages/CartPage";
-
-// import ComponentPreview from "./pages/ComponentPreview";
-// import NavbarPreview from "./pages/NavbarPreview";
+import RegisterPage from "./pages/RegisterPage";
 
 export default function App() {
   return (
@@ -19,12 +17,8 @@ export default function App() {
         <Route path="/search" element={<SearchResultsPage />} />
         <Route path="/products/:slug" element={<ProductDetailsPage />} />
         <Route path="/cart" element={<CartPage />} />
+        <Route path="/register" element={<RegisterPage />} />
 
-        {/* Keep these preview routes temporarily if you still use them.
-        <Route path="/component-preview" element={<ComponentPreview />} />
-        <Route path="/navbar-preview" element={<NavbarPreview />} /> */}
-
-        {/* Unknown URLs return to the homepage for now. */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
