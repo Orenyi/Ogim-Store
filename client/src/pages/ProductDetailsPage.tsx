@@ -10,6 +10,7 @@ import ProductSpecifications from "../components/product-details/ProductSpecific
 import ProductDetailsAccordion from "../components/product-details/ProductDetailsAccordion";
 import RelatedProducts from "../components/product-details/RelatedProducts";
 import MobilePurchaseBar from "../components/product-details/MobilePurchaseBar";
+import { useCart } from "../hooks/useCart";
 
 const productDetails: Record<
   string,
@@ -81,6 +82,7 @@ const defaultHighlights = [
 
 export default function ProductDetailsPage() {
   const { slug } = useParams<{ slug: string }>();
+  const { addToCart } = useCart();
 
   const product = sampleProducts.find((item) => item.slug === slug);
 
@@ -219,7 +221,14 @@ export default function ProductDetailsPage() {
 
           <div className="flex min-w-0 flex-col">
             <ProductInfo product={product} />
-            <ProductPurchasePanel product={product} />
+            <ProductPurchasePanel
+              product={product}
+              onAddToCart={addToCart}
+              onBuyNow={(selectedProduct, quantity) => {
+                addToCart(selectedProduct, quantity);
+                // Checkout navigation will be connected in the authentication step.
+              }}
+            />
           </div>
         </div>
       </section>
@@ -244,7 +253,7 @@ export default function ProductDetailsPage() {
       </section>
 
       {/* Sticky mobile purchase action */}
-      <MobilePurchaseBar product={product} />
+      <MobilePurchaseBar product={product} onAddToCart={addToCart} />
     </main>
   );
 }

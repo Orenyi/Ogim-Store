@@ -5,12 +5,15 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { ToastProvider } from "./components/ui/ToastProvider";
 import "./index.css";
+import { CartProvider } from "./context/CartContext";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
       <ToastProvider>
-        <App />
+        <CartProvider>
+          <App />
+        </CartProvider>
       </ToastProvider>
     </BrowserRouter>
   </React.StrictMode>,

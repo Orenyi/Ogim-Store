@@ -5,6 +5,7 @@ import Homepage from "./pages/Homepage";
 import ShopPage from "./pages/ShopPage";
 import SearchResultsPage from "./pages/SearchResultsPage";
 import ProductDetailsPage from "./pages/ProductDetailsPage";
+import CartPage from "./pages/CartPage";
 
 // import ComponentPreview from "./pages/ComponentPreview";
 // import NavbarPreview from "./pages/NavbarPreview";
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/shop" element={<ShopPage />} />
         <Route path="/search" element={<SearchResultsPage />} />
         <Route path="/products/:slug" element={<ProductDetailsPage />} />
+        <Route path="/cart" element={<CartPage />} />
 
         {/* Keep these preview routes temporarily if you still use them.
         <Route path="/component-preview" element={<ComponentPreview />} />

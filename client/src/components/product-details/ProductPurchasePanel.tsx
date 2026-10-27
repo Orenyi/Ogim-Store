@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FiMinus, FiPlus, FiShoppingCart } from "react-icons/fi";
 
 import type { Product } from "../../types/product";
+import { getMaxQuantity } from "../../utils/cartUtils";
 
 interface ProductPurchasePanelProps {
   product: Product;
@@ -16,8 +17,8 @@ export default function ProductPurchasePanel({
 }: ProductPurchasePanelProps) {
   const [quantity, setQuantity] = useState(1);
 
-  const maxQuantity = Math.max(0, product.stockQuantity ?? 99);
-  const canPurchase = product.inStock && maxQuantity > 0;
+  const maxQuantity = getMaxQuantity(product);
+  const canPurchase = maxQuantity > 0;
 
   function changeQuantity(amount: number) {
     setQuantity((current) =>
