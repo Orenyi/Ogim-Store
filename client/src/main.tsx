@@ -7,6 +7,7 @@ import { ToastProvider } from "./components/ui/ToastProvider";
 import "./index.css";
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from "./context/AuthContext";
+import { CheckoutProvider } from "./context/CheckoutContext";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -14,7 +15,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <ToastProvider>
         <CartProvider>
           <AuthProvider>
-            <App />
+            <CheckoutProvider>
+              <App />
+            </CheckoutProvider>
           </AuthProvider>
         </CartProvider>
       </ToastProvider>

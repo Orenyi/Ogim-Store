@@ -11,6 +11,9 @@ import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import PasswordResetSuccessPage from "./pages/PasswordResetSuccessPage";
+import CheckoutPage from "./pages/CheckoutPage";
+import ProtectedRoute from "./components/checkout/ProtectedRoute";
+import OrderConfirmationPage from "./pages/OrderConfirmationPage";
 
 export default function App() {
   return (
@@ -29,6 +32,13 @@ export default function App() {
           path="/password-reset-success"
           element={<PasswordResetSuccessPage />}
         />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route
+            path="/checkout/confirmation"
+            element={<OrderConfirmationPage />}
+          />
+        </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

@@ -50,7 +50,7 @@ export default function LoginForm() {
   const [values, setValues] = useState<LoginValues>(initialValues);
   const [errors, setErrors] = useState<LoginErrors>({});
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [notice, setNotice] = useState("");
 
   // Authentication context and navigation
