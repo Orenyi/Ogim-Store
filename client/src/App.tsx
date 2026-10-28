@@ -19,6 +19,7 @@ import AccountOrdersPage from "./pages/AccountOrdersPage";
 import AccountOrderDetailsPage from "./pages/AccountOrderDetailsPage";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
+import FAQPage from "./pages/FAQPage";
 
 export default function App() {
   return (
@@ -53,6 +54,7 @@ export default function App() {
         />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<ContactPage />} />
+        <Route path="/faq" element={<FAQPage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

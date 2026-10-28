@@ -28,7 +28,7 @@ const shopLinks = [
 
 const supportLinks = [
   { label: "Contact Us", to: "/contact" },
-  { label: "FAQs", to: "/faqs" },
+  { label: "FAQs", to: "/faq" },
   { label: "Warranty & Returns", to: "/warranty-returns" },
   { label: "Shipping & Delivery", to: "/shipping" },
   { label: "Track Order", to: "/account/orders" },
