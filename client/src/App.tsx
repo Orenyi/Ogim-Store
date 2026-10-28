@@ -18,6 +18,7 @@ import AccountOverviewPage from "./pages/AccountOverviewPage";
 import AccountOrdersPage from "./pages/AccountOrdersPage";
 import AccountOrderDetailsPage from "./pages/AccountOrderDetailsPage";
 import AboutPage from "./pages/AboutPage";
+import ContactPage from "./pages/ContactPage";
 
 export default function App() {
   return (
@@ -51,6 +52,7 @@ export default function App() {
           element={<AccountOrderDetailsPage />}
         />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/contact" element={<ContactPage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
