@@ -14,6 +14,9 @@ import PasswordResetSuccessPage from "./pages/PasswordResetSuccessPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import ProtectedRoute from "./components/checkout/ProtectedRoute";
 import OrderConfirmationPage from "./pages/OrderConfirmationPage";
+import AccountOverviewPage from "./pages/AccountOverviewPage";
+import AccountOrdersPage from "./pages/AccountOrdersPage";
+import AccountOrderDetailsPage from "./pages/AccountOrderDetailsPage";
 
 export default function App() {
   return (
@@ -39,6 +42,13 @@ export default function App() {
             element={<OrderConfirmationPage />}
           />
         </Route>
+        <Route path="/account" element={<AccountOverviewPage />} />
+        <Route path="/account" element={<AccountOverviewPage />} />
+        <Route path="/account/orders" element={<AccountOrdersPage />} />
+        <Route
+          path="/account/orders/:orderId"
+          element={<AccountOrderDetailsPage />}
+        />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

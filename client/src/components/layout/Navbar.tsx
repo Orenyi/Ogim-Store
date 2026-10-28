@@ -5,10 +5,10 @@ import { FiMenu, FiSearch, FiShoppingCart, FiUser, FiX } from "react-icons/fi";
 import ogimLogo from "../../assets/images/ogim_logo.webp";
 import MobileMenu from "./MobileMenu";
 import SearchSuggestions from "../search/SearchSuggestions";
+import { useAuth } from "../../context/AuthContext";
 
 type NavbarProps = {
   cartCount?: number;
-  isAuthenticated?: boolean;
 };
 
 const desktopLinks = [
@@ -18,10 +18,8 @@ const desktopLinks = [
   { label: "Deals", to: "/deals" },
 ];
 
-export default function Navbar({
-  cartCount = 0,
-  isAuthenticated = false,
-}: NavbarProps) {
+export default function Navbar({ cartCount = 0 }: NavbarProps) {
+  const { isAuthenticated } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
