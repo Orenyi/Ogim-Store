@@ -23,6 +23,7 @@ import FAQPage from "./pages/FAQPage";
 import ShippingPage from "./pages/ShippingPage";
 import ReturnsPage from "./pages/ReturnsPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
+import TermsPage from "./pages/TermsPage";
 
 export default function App() {
   return (
@@ -61,6 +62,7 @@ export default function App() {
         <Route path="/shipping" element={<ShippingPage />} />
         <Route path="/returns" element={<ReturnsPage />} />
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
