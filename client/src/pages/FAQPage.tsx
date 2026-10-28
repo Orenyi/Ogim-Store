@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FiHelpCircle } from "react-icons/fi";
+
 import { faqs, faqCategories, type FAQCategory } from "../data/faqs";
 import FAQAccordion from "../components/faq/FAQAccordion";
 import FAQContactCTA from "../components/faq/FAQContactCTA";
