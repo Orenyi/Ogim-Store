@@ -6,37 +6,43 @@ export default function ReturnsHero() {
 
   return (
     <section className="page-container pt-4 sm:pt-6">
-      <div className="relative isolate overflow-hidden rounded-[var(--radius-card)] bg-[var(--color-paper)]">
-        {/* Background image, positioned toward the right */}
-        <img
-          src={refundImage}
-          alt=""
-          aria-hidden="true"
-          fetchPriority="high"
-          className="absolute inset-0 -z-20 h-full w-full object-cover object-[65%_center] sm:object-[70%_center]"
-        />
-
-        {/* White overlay: strongest behind the text, fading toward the phones */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 -z-10 bg-gradient-to-r from-[#f0f0f0] via-white/40 via-45% to-white/0"
-        />
-
+      <div className="grid overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var( --color-paper)] md:grid-cols-[1.05fr_0.95fr]">
+        {/* Left: Text content */}
         <motion.div
-          initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={reduceMotion ? false : { opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
           transition={{ duration: reduceMotion ? 0 : 0.35 }}
-          className="relative flex min-h-[190px] items-center px-5 py-6 sm:min-h-[230px] sm:px-8 sm:py-8 lg:min-h-[260px] lg:px-10"
+          className="flex flex-col justify-center px-5 py-7 sm:px-8 sm:py-10 lg:px-12 lg:py-12"
         >
-          <div className="max-w-[65%] sm:max-w-[55%] lg:max-w-[48%]">
-            <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-[var(--color-ink)] sm:text-3xl lg:text-4xl">
-              Returns &amp; refunds
-            </h1>
+          <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-[var(--color-accent)] sm:text-sm">
+            Shop with confidence
+          </p>
 
-            <p className="mt-2 max-w-xs text-xs leading-5 text-[var(--color-muted)] sm:mt-3 sm:text-sm sm:leading-6">
-              Shop with confidence. Easy returns and a fair refund policy.
-            </p>
-          </div>
+          <h1 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
+            Returns
+            <span className="block">&amp; refunds</span>
+          </h1>
+
+          <p className="mt-4 max-w-lg text-sm leading-7 text-[var(--color-muted)] sm:text-base">
+            We want you to shop with confidence. Read our return policy to
+            understand eligibility, how to request a return, and what happens
+            next.
+          </p>
+        </motion.div>
+
+        {/* Right: Refund image */}
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: reduceMotion ? 0 : 0.4 }}
+          className="relative flex min-h-[200px] items-center justify-center overflow-hidden bg-[var( --color-paper)] px-4 py-5 sm:min-h-[260px] md:min-h-[320px] lg:min-h-[360px]"
+        >
+          <img
+            src={refundImage}
+            alt="Smartphones illustrating returns and refunds"
+            fetchPriority="high"
+            className="h-full max-h-[360px] w-full object-contain object-center"
+          />
         </motion.div>
       </div>
     </section>
