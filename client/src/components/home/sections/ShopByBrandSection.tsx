@@ -55,7 +55,7 @@ export default function ShopByBrandSection() {
             {storeBrands.map((brand) => (
               <Link
                 key={brand.slug}
-                to={`/shop/brand/${brand.slug}`}
+                to={`/shop?brand=${encodeURIComponent(brand.name)}`}
                 data-brand-item
                 className="group flex w-[72px] shrink-0 snap-start flex-col items-center justify-center rounded-full bg-[#eeebe2] px-2 py-3 transition-colors hover:bg-[var(--color-stone)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 sm:w-[84px] sm:py-4 lg:w-[122px] lg:py-6"
                 aria-label={`Shop ${brand.name} phones`}
@@ -80,21 +80,11 @@ export default function ShopByBrandSection() {
             ))}
           </div>
 
-          {/* <button
-            type="button"
-            onClick={scrollNext}
-            aria-label="Show more brands"
-            className="absolute right-0 top-1/2 z-10 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--color-stone)] bg-[var(--color-paper)]/95 text-[var(--color-ink)] shadow-sm transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] sm:flex"
-          >
-            <FiChevronRight size={20} aria-hidden="true" />
-          </button> */}
-
-          {/* Always visible on mobile, matching the compact reference */}
           <button
             type="button"
             onClick={scrollNext}
             aria-label="Show more brands"
-            className="absolute right-0 top-1/2 z-10 flex  size-8 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--color-stone)] bg-[var(--color-paper)]/95 text-[var(--color-ink)] shadow-sm transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] sm:hidden"
+            className="absolute right-0 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--color-stone)] bg-[var(--color-paper)]/95 text-[var(--color-ink)] shadow-sm transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] sm:hidden"
           >
             <FiChevronRight size={17} aria-hidden="true" />
           </button>

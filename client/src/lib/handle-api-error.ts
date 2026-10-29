@@ -1,4 +1,4 @@
-import { ApiError } from "./api-client";
+import { ApiError } from "./api";
 
 export interface ErrorToast {
   error: (message: string, duration?: number) => void;

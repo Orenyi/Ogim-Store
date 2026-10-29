@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   FiArrowRight,
@@ -25,9 +25,9 @@ type MobileMenuProps = {
 const menuItems = [
   { label: "Home", to: "/", icon: FiHome },
   { label: "Shop all phones", to: "/shop", icon: FiSmartphone },
-  { label: "Brands", to: "/brands", icon: FiTag },
-  { label: "New arrivals", to: "/new-arrivals", icon: FiTrendingUp },
-  { label: "Deals", to: "/deals", icon: FiTag },
+  { label: "Brands", to: "/shop?brands=all", icon: FiTag },
+  { label: "New arrivals", to: "/shop?condition=new", icon: FiTrendingUp },
+  { label: "Deals", to: "/shop?sort=price-low", icon: FiTag },
 ];
 
 export default function MobileMenu({
@@ -38,7 +38,9 @@ export default function MobileMenu({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const searchWrapperRef = useRef<HTMLDivElement>(null);
+
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -75,6 +77,40 @@ export default function MobileMenu({
     setSearchFocused(false);
     onClose();
     navigate(`/search?q=${encodeURIComponent(query)}`);
+  }
+
+  function isMenuItemActive(label: string) {
+    const params = new URLSearchParams(location.search);
+
+    switch (label) {
+      case "Home":
+        return location.pathname === "/";
+
+      case "Shop all phones":
+        return (
+          location.pathname === "/shop" &&
+          !params.has("brands") &&
+          !params.has("brand") &&
+          !params.has("condition") &&
+          !params.has("sort")
+        );
+
+      case "Brands":
+        return location.pathname === "/shop" && params.get("brands") === "all";
+
+      case "New arrivals":
+        return (
+          location.pathname === "/shop" && params.get("condition") === "new"
+        );
+
+      case "Deals":
+        return (
+          location.pathname === "/shop" && params.get("sort") === "price-low"
+        );
+
+      default:
+        return false;
+    }
   }
 
   return (
@@ -202,31 +238,33 @@ export default function MobileMenu({
               </p>
 
               <div className="space-y-1">
-                {menuItems.map(({ label, to, icon: Icon }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    end={to === "/"}
-                    onClick={onClose}
-                    className={({ isActive }) =>
-                      [
+                {menuItems.map(({ label, to, icon: Icon }) => {
+                  const active = isMenuItemActive(label);
+
+                  return (
+                    <Link
+                      key={label}
+                      to={to}
+                      onClick={onClose}
+                      aria-current={active ? "page" : undefined}
+                      className={[
                         "flex min-h-12 items-center gap-3 rounded-xl px-3",
                         "text-sm font-semibold transition-colors",
-                        isActive
+                        active
                           ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
                           : "text-[var(--color-ink)] hover:bg-[var(--color-paper)]",
-                      ].join(" ")
-                    }
-                  >
-                    <Icon size={18} aria-hidden="true" />
-                    <span className="flex-1">{label}</span>
-                    <FiChevronRight
-                      size={16}
-                      className="text-[var(--color-muted)]"
-                      aria-hidden="true"
-                    />
-                  </NavLink>
-                ))}
+                      ].join(" ")}
+                    >
+                      <Icon size={18} aria-hidden="true" />
+                      <span className="flex-1">{label}</span>
+                      <FiChevronRight
+                        size={16}
+                        className="text-[var(--color-muted)]"
+                        aria-hidden="true"
+                      />
+                    </Link>
+                  );
+                })}
               </div>
             </nav>
 

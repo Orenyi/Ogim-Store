@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { FiArrowRight } from "react-icons/fi";
 
-import { featuredProducts } from "../../../data/products";
-import type { ProductBrand } from "../../../types/product";
+import { getProducts } from "../../../services/product.service";
+import type { Product, ProductBrand } from "../../../types/product";
 import ProductGrid from "../../product/ProductGrid";
 
 const brandFilters: Array<{
@@ -21,14 +21,37 @@ const brandFilters: Array<{
 
 export default function FeaturedProductsSection() {
   const [activeBrand, setActiveBrand] = useState<ProductBrand | "All">("All");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredProducts = useMemo(() => {
-    if (activeBrand === "All") {
-      return featuredProducts;
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadFeaturedProducts() {
+      try {
+        const result = await getProducts({ page: 1, limit: 100 });
+
+        if (isMounted) {
+          setProducts(result.products.filter((product) => product.isFeatured));
+        }
+      } catch (error) {
+        console.error("Failed to load featured products:", error);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     }
 
-    return featuredProducts.filter((product) => product.brand === activeBrand);
-  }, [activeBrand]);
+    void loadFeaturedProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredProducts =
+    activeBrand === "All"
+      ? products
+      : products.filter((product) => product.brand === activeBrand);
 
   return (
     <section
@@ -36,7 +59,6 @@ export default function FeaturedProductsSection() {
       className="py-10 sm:py-12 lg:py-16"
     >
       <div className="page-container">
-        {/* Section heading */}
         <div className="mb-5 flex items-center justify-between gap-4 sm:mb-6">
           <h2
             id="featured-products-heading"
@@ -54,7 +76,6 @@ export default function FeaturedProductsSection() {
           </Link>
         </div>
 
-        {/* Brand filters */}
         <div
           aria-label="Filter featured phones by brand"
           className="mb-6 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none sm:mb-7"
@@ -84,9 +105,9 @@ export default function FeaturedProductsSection() {
           })}
         </div>
 
-        {/* Existing product cards and responsive grid */}
         <ProductGrid
           products={filteredProducts}
+          isLoading={isLoading}
           columns={4}
           emptyMessage="No featured phones from this brand yet."
         />

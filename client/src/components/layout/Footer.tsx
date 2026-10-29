@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { FiInstagram, FiFacebook, FiTwitter, FiYoutube } from "react-icons/fi";
 import visa from "../../assets/images/visa.png";
 import mastercard from "../../assets/images/mastercard.png";
@@ -20,10 +20,10 @@ type FooterProps = {
 
 const shopLinks = [
   { label: "All Phones", to: "/shop" },
-  { label: "New Arrivals", to: "/new-arrivals" },
-  { label: "Deals", to: "/deals" },
-  { label: "Brands", to: "/brands" },
-  { label: "By Condition", to: "/shop?condition=all" },
+  { label: "New Arrivals", to: "/shop?condition=new" },
+  { label: "Deals", to: "/shop?sort=price-low" },
+  { label: "Brands", to: "/shop?brands=all" },
+  { label: "By Condition", to: "/shop?condition=uk-used" },
 ];
 
 const supportLinks = [
@@ -95,6 +95,51 @@ function FooterLinkGroup({
   title: string;
   links: { label: string; to: string }[];
 }) {
+  const location = useLocation();
+
+  function isLinkActive(label: string, to: string) {
+    const params = new URLSearchParams(location.search);
+
+    if (title === "Shop") {
+      switch (label) {
+        case "All Phones":
+          return (
+            location.pathname === "/shop" &&
+            !params.has("brand") &&
+            !params.has("brands") &&
+            !params.has("condition") &&
+            !params.has("sort")
+          );
+
+        case "Brands":
+          return (
+            location.pathname === "/shop" && params.get("brands") === "all"
+          );
+
+        case "New Arrivals":
+          return (
+            location.pathname === "/shop" && params.get("condition") === "new"
+          );
+
+        case "Deals":
+          return (
+            location.pathname === "/shop" && params.get("sort") === "price-low"
+          );
+
+        case "By Condition":
+          return (
+            location.pathname === "/shop" &&
+            params.get("condition") === "uk-used"
+          );
+
+        default:
+          return false;
+      }
+    }
+
+    return location.pathname === to;
+  }
+
   return (
     <nav aria-label={title} className="min-w-0">
       <h2 className="mb-3 text-sm font-bold text-[var(--color-ink)]">
@@ -102,16 +147,26 @@ function FooterLinkGroup({
       </h2>
 
       <ul className="space-y-2">
-        {links.map((link) => (
-          <li key={`${link.label}-${link.to}`}>
-            <Link
-              to={link.to}
-              className="text-xs leading-5 text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)] sm:text-[13px]"
-            >
-              {link.label}
-            </Link>
-          </li>
-        ))}
+        {links.map((link) => {
+          const active = isLinkActive(link.label, link.to);
+
+          return (
+            <li key={`${link.label}-${link.to}`}>
+              <Link
+                to={link.to}
+                aria-current={active ? "page" : undefined}
+                className={[
+                  "text-xs leading-5 transition-colors sm:text-[13px]",
+                  active
+                    ? "font-semibold text-[var(--color-accent)]"
+                    : "text-[var(--color-muted)] hover:text-[var(--color-accent)]",
+                ].join(" ")}
+              >
+                {link.label}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );

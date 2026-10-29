@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { FiMenu, FiSearch, FiShoppingCart, FiUser, FiX } from "react-icons/fi";
 
 import ogimLogo from "../../assets/images/ogim_logo.webp";
@@ -13,9 +13,9 @@ type NavbarProps = {
 
 const desktopLinks = [
   { label: "Shop", to: "/shop" },
-  { label: "Brands", to: "/brands" },
-  { label: "New Arrivals", to: "/new-arrivals" },
-  { label: "Deals", to: "/deals" },
+  { label: "Brands", to: "/shop?brands=all" },
+  { label: "New Arrivals", to: "/shop?condition=new" },
+  { label: "Deals", to: "/shop?sort=price-low" },
 ];
 
 export default function Navbar({ cartCount = 0 }: NavbarProps) {
@@ -26,6 +26,7 @@ export default function Navbar({ cartCount = 0 }: NavbarProps) {
 
   const searchWrapperRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     function handleOutsidePointer(event: PointerEvent) {
@@ -89,27 +90,52 @@ export default function Navbar({ cartCount = 0 }: NavbarProps) {
           </Link>
 
           {/* Desktop navigation */}
+          {/* Desktop navigation */}
           <nav
             aria-label="Main navigation"
             className="hidden shrink-0 items-center gap-4 md:flex lg:gap-6"
           >
-            {desktopLinks.map(({ label, to }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) =>
-                  [
+            {desktopLinks.map(({ label, to }) => {
+              const isActive =
+                label === "Shop"
+                  ? location.pathname === "/shop" &&
+                    !location.search.includes("brands=all") &&
+                    !location.search.includes("condition=new") &&
+                    !location.search.includes("sort=price-low") &&
+                    !location.search.includes("brand=") &&
+                    !location.search.includes("condition=") &&
+                    !location.search.includes("sort=")
+                  : label === "Brands"
+                    ? location.pathname === "/shop" &&
+                      new URLSearchParams(location.search).get("brands") ===
+                        "all"
+                    : label === "New Arrivals"
+                      ? location.pathname === "/shop" &&
+                        new URLSearchParams(location.search).get(
+                          "condition",
+                        ) === "new"
+                      : label === "Deals"
+                        ? location.pathname === "/shop" &&
+                          new URLSearchParams(location.search).get("sort") ===
+                            "price-low"
+                        : false;
+
+              return (
+                <NavLink
+                  key={label}
+                  to={to}
+                  className={[
                     "whitespace-nowrap text-[11px] font-semibold",
                     "transition-colors hover:text-[var(--color-accent)]",
                     isActive
                       ? "text-[var(--color-accent)]"
                       : "text-[var(--color-ink)]",
-                  ].join(" ")
-                }
-              >
-                {label}
-              </NavLink>
-            ))}
+                  ].join(" ")}
+                >
+                  {label}
+                </NavLink>
+              );
+            })}
           </nav>
 
           {/* Desktop search with suggestions */}

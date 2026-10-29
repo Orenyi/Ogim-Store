@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
-import { sampleProducts } from "../data/products";
-import type { ProductBrand, ProductCondition } from "../types/product";
+import { getProducts } from "../services/product.service";
+import type { Product, ProductBrand, ProductCondition } from "../types/product";
 
 import ShopToolbar from "../components/shop/ShopToolbar";
 import type {
@@ -25,21 +26,144 @@ const initialFilters: ShopFilterState = {
   availability: "all",
 };
 
-export default function ShopPage() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filters, setFilters] = useState<ShopFilterState>(initialFilters);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [sortBy, setSortBy] = useState<ShopSortOption>("newest");
+const validBrands: ProductBrand[] = [
+  "Apple",
+  "Samsung",
+  "Google",
+  "Xiaomi",
+  "Tecno",
+  "Infinix",
+  "Other",
+];
 
-  // Search and filter the existing product catalogue.
+const allBrandsExceptOther = validBrands.filter((brand) => brand !== "Other");
+
+const validConditions: ProductCondition[] = ["new", "uk-used", "refurbished"];
+
+const validSortOptions: ShopSortOption[] = [
+  "newest",
+  "price-low",
+  "price-high",
+  "name-asc",
+];
+
+function getFiltersFromParams(params: URLSearchParams): ShopFilterState {
+  const brand = params.get("brand");
+  const condition = params.get("condition");
+  const brands = params.get("brands");
+
+  return {
+    ...initialFilters,
+    brands:
+      brands === "all"
+        ? allBrandsExceptOther
+        : brand && validBrands.includes(brand as ProductBrand)
+          ? [brand as ProductBrand]
+          : [],
+    conditions:
+      condition && validConditions.includes(condition as ProductCondition)
+        ? [condition as ProductCondition]
+        : [],
+  };
+}
+
+export default function ShopPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  // Read navbar filters directly from the URL.
+  const filters = useMemo(
+    () => getFiltersFromParams(searchParams),
+    [searchParams],
+  );
+
+  const sortBy = useMemo<ShopSortOption>(() => {
+    const sort = searchParams.get("sort") as ShopSortOption | null;
+
+    return sort && validSortOptions.includes(sort) ? sort : "newest";
+  }, [searchParams]);
+
+  // Update brand and condition filters without competing URL effects.
+  const updateFilters = useCallback(
+    (nextFilters: ShopFilterState) => {
+      const params = new URLSearchParams(searchParams);
+
+      const isAllBrandsSelected =
+        nextFilters.brands.length === allBrandsExceptOther.length &&
+        allBrandsExceptOther.every((brand) =>
+          nextFilters.brands.includes(brand),
+        );
+
+      params.delete("brand");
+      params.delete("brands");
+      params.delete("condition");
+
+      if (isAllBrandsSelected) {
+        params.set("brands", "all");
+      } else if (nextFilters.brands.length === 1) {
+        params.set("brand", nextFilters.brands[0]);
+      }
+
+      if (nextFilters.conditions.length === 1) {
+        params.set("condition", nextFilters.conditions[0]);
+      }
+
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  // Keep sorting in the URL so navbar navigation stays consistent.
+  const updateSort = useCallback(
+    (nextSort: ShopSortOption) => {
+      const params = new URLSearchParams(searchParams);
+
+      if (nextSort === "newest") {
+        params.delete("sort");
+      } else {
+        params.set("sort", nextSort);
+      }
+
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  const loadProducts = useCallback(async () => {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      // Load the catalogue once; existing filters run on the fetched data.
+      const result = await getProducts({ page: 1, limit: 100 });
+      setProducts(result.products);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load products. Please try again.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadProducts();
+  }, [loadProducts]);
+
   const filteredProducts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-
     const minPrice = filters.minPrice.trim() ? Number(filters.minPrice) : null;
-
     const maxPrice = filters.maxPrice.trim() ? Number(filters.maxPrice) : null;
 
-    return sampleProducts.filter((product) => {
+    return products.filter((product) => {
       const searchableValues = [
         product.name,
         product.brand,
@@ -82,32 +206,36 @@ export default function ShopPage() {
         matchesAvailability
       );
     });
-  }, [searchQuery, filters]);
+  }, [products, searchQuery, filters]);
 
-  // Sorting is applied after filtering.
   const sortedProducts = useMemo(() => {
-    const products = [...filteredProducts];
+    const result = [...filteredProducts];
 
     switch (sortBy) {
       case "price-low":
-        return products.sort((a, b) => a.price - b.price);
+        return result.sort((a, b) => a.price - b.price);
 
       case "price-high":
-        return products.sort((a, b) => b.price - a.price);
+        return result.sort((a, b) => b.price - a.price);
 
       case "name-asc":
-        return products.sort((a, b) => a.name.localeCompare(b.name));
+        return result.sort((a, b) => a.name.localeCompare(b.name));
 
       case "newest":
       default:
-        // Retains source order until products have creation timestamps.
-        return products;
+        return result;
     }
   }, [filteredProducts, sortBy]);
 
   const clearFilters = useCallback(() => {
-    setFilters({ ...initialFilters });
-  }, []);
+    const params = new URLSearchParams(searchParams);
+
+    params.delete("brand");
+    params.delete("brands");
+    params.delete("condition");
+
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const activeFilterCount =
     filters.brands.length +
@@ -118,24 +246,24 @@ export default function ShopPage() {
     Number(filters.availability !== "all");
 
   const removeBrand = (brand: ProductBrand) => {
-    setFilters((current) => ({
-      ...current,
-      brands: current.brands.filter((item) => item !== brand),
-    }));
+    updateFilters({
+      ...filters,
+      brands: filters.brands.filter((item) => item !== brand),
+    });
   };
 
   const removeCondition = (condition: ProductCondition) => {
-    setFilters((current) => ({
-      ...current,
-      conditions: current.conditions.filter((item) => item !== condition),
-    }));
+    updateFilters({
+      ...filters,
+      conditions: filters.conditions.filter((item) => item !== condition),
+    });
   };
 
   const removeStorage = (storage: string) => {
-    setFilters((current) => ({
-      ...current,
-      storages: current.storages.filter((item) => item !== storage),
-    }));
+    updateFilters({
+      ...filters,
+      storages: filters.storages.filter((item) => item !== storage),
+    });
   };
 
   const activeChips: ActiveFilterChip[] = [
@@ -167,11 +295,7 @@ export default function ShopPage() {
           {
             key: "min-price",
             label: `Min ₦${Number(filters.minPrice).toLocaleString("en-NG")}`,
-            onRemove: () =>
-              setFilters((current) => ({
-                ...current,
-                minPrice: "",
-              })),
+            onRemove: () => updateFilters({ ...filters, minPrice: "" }),
           },
         ]
       : []),
@@ -181,11 +305,7 @@ export default function ShopPage() {
           {
             key: "max-price",
             label: `Max ₦${Number(filters.maxPrice).toLocaleString("en-NG")}`,
-            onRemove: () =>
-              setFilters((current) => ({
-                ...current,
-                maxPrice: "",
-              })),
+            onRemove: () => updateFilters({ ...filters, maxPrice: "" }),
           },
         ]
       : []),
@@ -197,10 +317,10 @@ export default function ShopPage() {
             label:
               filters.availability === "in-stock" ? "In stock" : "Out of stock",
             onRemove: () =>
-              setFilters((current) => ({
-                ...current,
+              updateFilters({
+                ...filters,
                 availability: "all",
-              })),
+              }),
           },
         ]
       : []),
@@ -208,54 +328,66 @@ export default function ShopPage() {
 
   return (
     <main className="min-h-screen bg-paper">
-      {/* Mobile search appears before the Shop header */}
       <div className="page-container">
         <ShopSearchBar value={searchQuery} onChange={setSearchQuery} />
       </div>
 
-      {/* Keep the header count as the total catalogue count */}
-      <ShopPageHeader productCount={sampleProducts.length} />
+      <ShopPageHeader productCount={products.length} />
 
       <div className="page-container py-5 lg:py-6">
         <div className="flex items-start gap-5 xl:gap-6">
-          {/* Desktop filter sidebar */}
           <aside className="hidden w-[220px] shrink-0 self-start overflow-hidden rounded-xl border border-stone bg-white lg:block xl:w-[240px]">
             <ShopFilters
-              products={sampleProducts}
+              products={products}
               filters={filters}
-              onChange={setFilters}
+              onChange={updateFilters}
               onClear={clearFilters}
             />
           </aside>
 
-          {/* Product results */}
           <section aria-label="Shop products" className="min-w-0 flex-1">
             <ShopToolbar
               resultCount={sortedProducts.length}
-              totalCount={sampleProducts.length}
+              totalCount={products.length}
               activeFilterCount={activeFilterCount}
               activeChips={activeChips}
               sortBy={sortBy}
-              onSortChange={setSortBy}
+              onSortChange={updateSort}
               onOpenFilters={() => setMobileFiltersOpen(true)}
               onClearAll={clearFilters}
             />
 
-            <ProductGrid
-              products={sortedProducts}
-              columns={4}
-              emptyMessage="No phones match your search or filters. Try adjusting your selections."
-            />
+            {error && !isLoading ? (
+              <div
+                role="alert"
+                className="mt-4 rounded-xl border border-[var(--color-error)]/30 bg-white p-6 text-center"
+              >
+                <p className="text-sm text-[var(--color-error)]">{error}</p>
+                <button
+                  type="button"
+                  onClick={() => void loadProducts()}
+                  className="mt-3 rounded-[var(--radius-control)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[#D9531D]"
+                >
+                  Try again
+                </button>
+              </div>
+            ) : (
+              <ProductGrid
+                products={sortedProducts}
+                isLoading={isLoading}
+                columns={4}
+                emptyMessage="No phones match your search or filters. Try adjusting your selections."
+              />
+            )}
           </section>
         </div>
       </div>
 
-      {/* Bottom-sheet filters for mobile and tablet */}
       <MobileFilterDrawer
         open={mobileFiltersOpen}
-        products={sampleProducts}
+        products={products}
         filters={filters}
-        onChange={setFilters}
+        onChange={updateFilters}
         onClear={clearFilters}
         onClose={() => setMobileFiltersOpen(false)}
         onApply={() => setMobileFiltersOpen(false)}

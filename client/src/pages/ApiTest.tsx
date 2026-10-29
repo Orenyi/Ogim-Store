@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { apiRequest, ApiError } from "../lib/api-client";
+import { apiRequest, ApiError } from "../lib/api";
 import { useToast } from "../components/ui/ToastProvider";
 
 export default function ApiTest() {
