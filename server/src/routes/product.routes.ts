@@ -15,8 +15,17 @@ import {
   createProductSchema,
   updateProductSchema,
 } from "../validators/product.validation.js";
+import { addProductImages } from "../controllers/product.controller.js";
+import { uploadProductImages } from "../middleware/upload.middleware.js";
 
 const router = Router();
+
+router.post(
+  "/:id/images",
+  requireAdmin,
+  uploadProductImages.array("images", 10),
+  addProductImages,
+);
 
 // Public storefront routes
 router.get("/", getProducts);

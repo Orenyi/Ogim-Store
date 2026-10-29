@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 import ProductModel from "../models/product.model.js";
+import cloudinary from "../config/cloudinary.js";
+import { uploadImageBuffer } from "../services/cloudinary.service.js";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 12;
@@ -374,6 +376,104 @@ export async function archiveProduct(
     res.status(500).json({
       success: false,
       message: "Unable to archive product.",
+    });
+  }
+}
+
+/**
+ * POST /api/v1/products/:id/images
+ * Upload product images to Cloudinary and store their metadata in MongoDB.
+ */
+export async function addProductImages(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const uploadedPublicIds: string[] = [];
+
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid product ID.",
+      });
+      return;
+    }
+
+    const files = req.files;
+
+    if (!Array.isArray(files) || files.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: "Select at least one image to upload.",
+      });
+      return;
+    }
+
+    const product = await ProductModel.findById(req.params.id);
+
+    if (!product) {
+      res.status(404).json({
+        success: false,
+        message: "Product not found.",
+      });
+      return;
+    }
+
+    if (product.images.length + files.length > 10) {
+      res.status(400).json({
+        success: false,
+        message: `This product can have at most 10 images. It currently has ${product.images.length}.`,
+      });
+      return;
+    }
+
+    const newImages: {
+      url: string;
+      publicId: string;
+      alt: string;
+    }[] = [];
+
+    for (const file of files) {
+      const uploaded = await uploadImageBuffer(
+        file.buffer,
+        "ogim-store/products",
+      );
+
+      uploadedPublicIds.push(uploaded.publicId);
+
+      newImages.push({
+        url: uploaded.url,
+        publicId: uploaded.publicId,
+        alt: `${product.name} product image`,
+      });
+    }
+
+    product.images.push(...newImages);
+    await product.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Product images uploaded successfully.",
+      data: {
+        productId: product.id,
+        images: product.images,
+      },
+    });
+  } catch (error: unknown) {
+    console.error("addProductImages error:", error);
+
+    // Compensate for failed uploads if saving the product fails.
+    await Promise.allSettled(
+      uploadedPublicIds.map((publicId) =>
+        cloudinary.uploader.destroy(publicId, {
+          resource_type: "image",
+        }),
+      ),
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to upload product images.",
     });
   }
 }

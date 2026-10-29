@@ -1,18 +1,17 @@
 import { apiRequest } from "../lib/api";
-import type { Product } from "../types/product";
+import type { Product, ProductTechnicalSpecifications } from "../types/product";
 
 interface ApiProduct {
   _id: string;
   name: string;
   slug: string;
+  model?: string;
+  description?: string;
   brand: Product["brand"];
   condition: "brand-new" | "uk-used" | "refurbished";
   price: number;
   compareAtPrice?: number;
-  specifications?: {
-    storage?: string;
-    color?: string;
-  };
+  specifications?: ProductTechnicalSpecifications;
   images?: {
     url: string;
     alt?: string;
@@ -56,6 +55,8 @@ function mapProduct(product: ApiProduct): Product {
     id: product._id,
     slug: product.slug,
     name: product.name,
+    model: product.model,
+    description: product.description,
     brand: product.brand,
     condition: product.condition === "brand-new" ? "new" : product.condition,
     price: product.price,
@@ -64,6 +65,7 @@ function mapProduct(product: ApiProduct): Product {
     colour: product.specifications?.color ?? "",
     image: product.images?.[0]?.url ?? "",
     images: product.images?.map((image) => image.url) ?? [],
+    specifications: product.specifications,
     rating: product.rating,
     reviewCount: product.reviewCount,
     stockQuantity: product.stockQuantity,
@@ -79,11 +81,18 @@ export async function getProducts(
   const params = new URLSearchParams();
 
   if (query.search) params.set("search", query.search);
-  query.brand?.forEach((brand) => params.append("brand", brand));
-  query.condition?.forEach((condition) =>
-    params.append("condition", condition === "new" ? "brand-new" : condition),
-  );
-  query.storage?.forEach((storage) => params.append("storage", storage));
+
+  query.brand?.forEach((brand) => {
+    params.append("brand", brand);
+  });
+
+  query.condition?.forEach((condition) => {
+    params.append("condition", condition === "new" ? "brand-new" : condition);
+  });
+
+  query.storage?.forEach((storage) => {
+    params.append("storage", storage);
+  });
 
   if (query.minPrice !== undefined) {
     params.set("minPrice", String(query.minPrice));
@@ -98,10 +107,9 @@ export async function getProducts(
   }
 
   if (query.sort) params.set("sort", query.sort);
+
   params.set("page", String(query.page ?? 1));
   params.set("limit", String(query.limit ?? 12));
-
-  const { apiRequest } = await import("../lib/api");
 
   const response = await apiRequest<
     ApiResponse<ApiProduct[]> & {

@@ -9,10 +9,25 @@ export type ProductBrand =
   | "Infinix"
   | "Other";
 
+export interface ProductTechnicalSpecifications {
+  storage?: string;
+  ram?: string;
+  color?: string;
+  display?: string;
+  battery?: string;
+  camera?: string;
+  operatingSystem?: string;
+  network?: string;
+  processor?: string;
+  additionalFeatures?: string[];
+}
+
 export interface Product {
   id: string;
   slug: string;
   name: string;
+  model?: string;
+  description?: string;
   brand: ProductBrand;
   condition: ProductCondition;
 
@@ -24,6 +39,8 @@ export interface Product {
   colour: string;
   image: string;
   images?: string[];
+
+  specifications?: ProductTechnicalSpecifications;
 
   rating?: number;
   reviewCount?: number;
