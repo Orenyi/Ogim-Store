@@ -15,6 +15,8 @@ import PasswordRequirements, {
   getPasswordRequirements,
 } from "./PasswordRequirements";
 import { useAuth } from "../../context/AuthContext";
+import { ApiError } from "../../lib/api";
+import GoogleSignInButton from "./GoogleSignInButton";
 
 interface RegisterValues {
   fullName: string;
@@ -88,26 +90,33 @@ function validateForm(values: RegisterValues): RegisterErrors {
   return errors;
 }
 
+function getSafeReturnTo(destination: unknown): string {
+  if (
+    typeof destination === "string" &&
+    destination.startsWith("/") &&
+    !destination.startsWith("//") &&
+    !destination.startsWith("/\\") &&
+    !destination.includes("\\")
+  ) {
+    return destination;
+  }
+
+  return "/";
+}
+
 export default function RegisterForm() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Preserve the destination when arriving from a protected route.
   const requestedDestination: unknown = location.state?.from;
-
-  const returnTo =
-    typeof requestedDestination === "string" &&
-    requestedDestination.startsWith("/") &&
-    !requestedDestination.startsWith("//") &&
-    !requestedDestination.startsWith("/\\")
-      ? requestedDestination
-      : "/";
+  const returnTo = getSafeReturnTo(requestedDestination);
 
   const [values, setValues] = useState<RegisterValues>(initialValues);
   const [errors, setErrors] = useState<RegisterErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
 
   function updateField<K extends keyof RegisterValues>(
@@ -129,8 +138,10 @@ export default function RegisterForm() {
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (loading) return;
 
     setAttemptedSubmit(true);
     setNotice("");
@@ -143,11 +154,64 @@ export default function RegisterForm() {
       return;
     }
 
-    // DEMO ONLY: this creates frontend auth state, not a real account.
-    register(values.fullName.trim(), values.email.trim());
+    setLoading(true);
 
-    // Return to the intended destination, or the homepage by default.
-    navigate(returnTo, { replace: true });
+    try {
+      await register(
+        values.fullName.trim(),
+        values.email.trim(),
+        `234${normalizeNigerianPhone(values.phoneNumber)}`,
+        values.password,
+        values.acceptedTerms,
+      );
+
+      navigate(returnTo, { replace: true });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.status === 409) {
+          setNotice(
+            "An account with those details may already exist. Try signing in instead.",
+          );
+        } else if (error.status === 429) {
+          setNotice(
+            "Too many registration attempts. Please wait before trying again.",
+          );
+        } else if (error.status === 400 && Array.isArray(error.details)) {
+          const serverErrors: RegisterErrors = {};
+
+          for (const issue of error.details) {
+            if (
+              typeof issue === "object" &&
+              issue !== null &&
+              "path" in issue &&
+              "message" in issue
+            ) {
+              const path = (issue as { path: unknown[] }).path[0];
+              const message = (issue as { message: string }).message;
+
+              if (typeof path === "string" && path in initialValues) {
+                serverErrors[path as keyof RegisterValues] = message;
+              }
+            }
+          }
+
+          setErrors((current) => ({ ...current, ...serverErrors }));
+          setNotice(
+            Object.keys(serverErrors).length
+              ? "Please correct the highlighted fields."
+              : error.message,
+          );
+        } else {
+          setNotice(error.message);
+        }
+      } else {
+        setNotice(
+          "Unable to create your account right now. Check your connection and try again.",
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -174,7 +238,7 @@ export default function RegisterForm() {
 
       {notice && (
         <div
-          role="status"
+          role="alert"
           aria-live="polite"
           className={[
             "mb-5 flex items-start gap-2 rounded-[var(--radius-control)] border p-3 text-sm leading-5",
@@ -340,15 +404,27 @@ export default function RegisterForm() {
 
         <button
           type="submit"
-          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-accent)] px-5 py-3 text-sm font-bold text-white transition-colors duration-150 hover:bg-[var(--color-accent-hover)] active:scale-[0.99]"
+          disabled={loading}
+          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-accent)] px-5 py-3 text-sm font-bold text-white transition-colors duration-150 hover:bg-[var(--color-accent-hover)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
         >
-          Create account
-          <FiArrowRight size={18} aria-hidden="true" />
+          {loading ? (
+            <>
+              <span
+                aria-hidden="true"
+                className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+              />
+              Creating account...
+            </>
+          ) : (
+            <>
+              Create account
+              <FiArrowRight size={18} aria-hidden="true" />
+            </>
+          )}
         </button>
 
         <p className="text-xs leading-5 text-[var(--color-muted)]">
-          Demo mode: registration is simulated in this browser session. No
-          account is created on a server.
+          Your account details are securely processed by Ogim Store.
         </p>
       </form>
 
@@ -357,22 +433,9 @@ export default function RegisterForm() {
         <span className="text-xs text-[var(--color-muted)]">OR</span>
         <span className="h-px flex-1 bg-[var(--color-border)]" />
       </div>
-
-      <button
-        type="button"
-        disabled
-        title="Google registration is not configured yet"
-        className="flex min-h-12 w-full cursor-not-allowed items-center justify-center gap-3 rounded-[var(--radius-control)] border border-[var(--color-border)] bg-white px-4 text-sm font-semibold text-[var(--color-muted)] opacity-70"
-      >
-        <span
-          aria-hidden="true"
-          className="font-extrabold text-base text-[#4285F4]"
-        >
-          G
-        </span>
-        Continue with Google
-        <span className="text-xs font-normal">(Coming later)</span>
-      </button>
+      <div className="flex w-full  items-center justify-center ">
+        <GoogleSignInButton />
+      </div>
     </div>
   );
 }

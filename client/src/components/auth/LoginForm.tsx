@@ -11,6 +11,8 @@ import {
 
 import FormField from "./FormField";
 import { useAuth } from "../../context/AuthContext";
+import { ApiError } from "../../lib/api";
+import GoogleSignInButton from "./GoogleSignInButton";
 
 interface LoginValues {
   email: string;
@@ -46,29 +48,33 @@ function validateLogin(values: LoginValues): LoginErrors {
   return errors;
 }
 
+function getSafeReturnTo(destination: unknown): string {
+  if (
+    typeof destination === "string" &&
+    destination.startsWith("/") &&
+    !destination.startsWith("//") &&
+    !destination.startsWith("/\\") &&
+    !destination.includes("\\")
+  ) {
+    return destination;
+  }
+
+  return "/";
+}
+
 export default function LoginForm() {
   const [values, setValues] = useState<LoginValues>(initialValues);
   const [errors, setErrors] = useState<LoginErrors>({});
   const [showPassword, setShowPassword] = useState(false);
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
 
-  // Authentication context and navigation
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Restore the intended destination after demo sign-in.
-  // Only allow local application paths.
   const requestedDestination: unknown = location.state?.from;
-
-  const returnTo =
-    typeof requestedDestination === "string" &&
-    requestedDestination.startsWith("/") &&
-    !requestedDestination.startsWith("//") &&
-    !requestedDestination.startsWith("/\\")
-      ? requestedDestination
-      : "/";
+  const returnTo = getSafeReturnTo(requestedDestination);
 
   function updateField<K extends keyof LoginValues>(
     field: K,
@@ -83,7 +89,7 @@ export default function LoginForm() {
     }));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (loading) return;
@@ -97,11 +103,35 @@ export default function LoginForm() {
       return;
     }
 
-    // DEMO ONLY: this does not verify the password.
-    // Replace with a real authentication API when the backend exists.
-    login(values.email);
+    setLoading(true);
 
-    navigate(returnTo, { replace: true });
+    try {
+      await login(values.email.trim(), values.password, values.rememberMe);
+
+      navigate(returnTo, { replace: true });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.status === 429) {
+          setNotice(
+            "Too many sign-in attempts. Please wait a while before trying again.",
+          );
+        } else if (error.status === 401) {
+          setNotice("Invalid email or password.");
+        } else if (error.status === 403) {
+          setNotice(
+            "Your session could not be verified. Refresh the page and try again.",
+          );
+        } else {
+          setNotice(error.message);
+        }
+      } else {
+        setNotice(
+          "Unable to sign in right now. Check your connection and try again.",
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -121,9 +151,9 @@ export default function LoginForm() {
 
       {notice && (
         <div
-          role="status"
+          role="alert"
           aria-live="polite"
-          className="mb-5 flex items-start gap-2 rounded-[var(--radius-control)] border border-[var(--color-warning)] bg-[var(--color-warning-soft)] p-3 text-sm leading-5 text-[var(--color-ink)]"
+          className="mb-5 flex items-start gap-2 rounded-[var(--radius-control)] border border-[var(--color-stone)] bg-[var(--color-paper)] p-3 text-sm leading-5 text-[var(--color-ink)]"
         >
           <FiAlertCircle
             size={18}
@@ -194,7 +224,7 @@ export default function LoginForm() {
 
           <Link
             to="/forgot-password"
-            className="text-sm font-semibold text-[var(--color-accent)] transition-colors hover:text-[var(--color-accent-hover)]"
+            className="text-sm font-semibold text-[var(--color-accent)] transition-colors hover:text-[var(--color-ink)]"
           >
             Forgot password?
           </Link>
@@ -203,7 +233,7 @@ export default function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-accent)] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-70"
+          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-accent)] px-5 py-3 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {loading ? (
             <>
@@ -223,37 +253,23 @@ export default function LoginForm() {
       </form>
 
       <div className="my-5 flex items-center gap-3">
-        <span className="h-px flex-1 bg-[var(--color-border)]" />
+        <span className="h-px flex-1 bg-[var(--color-stone)]" />
         <span className="text-xs font-medium text-[var(--color-muted)]">
           OR
         </span>
-        <span className="h-px flex-1 bg-[var(--color-border)]" />
+        <span className="h-px flex-1 bg-[var(--color-stone)]" />
       </div>
 
-      <button
-        type="button"
-        disabled
-        title="Google sign-in will be enabled when authentication is integrated"
-        className="flex min-h-12 w-full cursor-not-allowed items-center justify-center gap-3 rounded-[var(--radius-control)] border border-[var(--color-border)] bg-white px-4 text-sm font-semibold text-[var(--color-ink)] opacity-70"
-      >
-        <span
-          aria-hidden="true"
-          className="text-lg font-extrabold text-[#4285F4]"
-        >
-          G
-        </span>
-        Continue with Google
-        <span className="text-xs font-normal text-[var(--color-muted)]">
-          (Coming later)
-        </span>
-      </button>
+      <div className="flex w-full  items-center justify-center ">
+        <GoogleSignInButton />
+      </div>
 
       <p className="mt-6 text-center text-sm text-[var(--color-muted)]">
         Don&apos;t have an account?{" "}
         <Link
           to="/register"
           state={location.state}
-          className="font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
+          className="font-semibold text-[var(--color-accent)] hover:opacity-80"
         >
           Create account
         </Link>

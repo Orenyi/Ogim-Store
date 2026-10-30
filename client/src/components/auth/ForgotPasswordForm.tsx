@@ -10,16 +10,18 @@ import {
 } from "react-icons/fi";
 
 import FormField from "./FormField";
+import { ApiError, forgotPassword } from "../../lib/api";
 
 type FormStatus = "idle" | "loading" | "success" | "error";
 
-type ErrorType = "validation" | "network" | null;
+type ErrorType = "validation" | "network" | "server" | null;
 
 export default function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<FormStatus>("idle");
   const [errorType, setErrorType] = useState<ErrorType>(null);
   const [emailError, setEmailError] = useState("");
+  const [serverError, setServerError] = useState("");
 
   function validateEmail(value: string): string {
     const normalizedEmail = value.trim();
@@ -38,6 +40,7 @@ export default function ForgotPasswordForm() {
   function handleEmailChange(value: string) {
     setEmail(value);
     setEmailError("");
+    setServerError("");
     setErrorType(null);
 
     if (status !== "loading") {
@@ -45,27 +48,45 @@ export default function ForgotPasswordForm() {
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (status === "loading") return;
 
-    const validationError = validateEmail(email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const validationError = validateEmail(normalizedEmail);
+
     setEmailError(validationError);
+    setServerError("");
     setErrorType(validationError ? "validation" : null);
-    setStatus("idle");
 
-    if (validationError) return;
+    if (validationError) {
+      setStatus("idle");
+      return;
+    }
 
-    // Frontend-only: no request is sent and no email is delivered.
-    // Replace this demo response with the real API integration later.
-    setStatus("success");
-  }
+    setStatus("loading");
 
-  function simulateNetworkError() {
-    // Optional development-only helper for previewing the error design.
-    setStatus("error");
-    setErrorType("network");
+    try {
+      await forgotPassword({
+        email: normalizedEmail,
+      });
+
+      setStatus("success");
+      setErrorType(null);
+    } catch (error) {
+      setStatus("error");
+
+      if (error instanceof ApiError) {
+        setErrorType("server");
+        setServerError(error.message);
+      } else {
+        setErrorType("network");
+        setServerError(
+          "Unable to connect to the server. Please check your internet connection and try again.",
+        );
+      }
+    }
   }
 
   const isLoading = status === "loading";
@@ -81,7 +102,7 @@ export default function ForgotPasswordForm() {
         </h2>
 
         <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">
-          Enter your email address and we&apos;ll help you reset your password.
+          Enter your email address and we'll help you reset your password.
         </p>
       </header>
 
@@ -96,11 +117,7 @@ export default function ForgotPasswordForm() {
           </h3>
 
           <p className="mt-3 text-sm leading-6 text-[var(--color-muted)]">
-            Your email address{" "}
-            <span className="font-semibold text-[var(--color-ink)]">
-              {email.trim()}
-            </span>{" "}
-            passed validation.
+            {`If an account exists for ${email.trim()}, you'll receive a password reset link shortly.`}
           </p>
 
           <div className="mt-6 flex items-start gap-3 rounded-[var(--radius-control)] border border-[var(--color-success-soft)] bg-[var(--color-success-soft)] p-4 text-left">
@@ -112,11 +129,12 @@ export default function ForgotPasswordForm() {
 
             <div>
               <p className="text-sm font-bold text-[var(--color-ink)]">
-                Demo mode
+                Check your inbox
               </p>
+
               <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">
-                Password recovery is not connected yet. No reset email has
-                actually been sent.
+                If your email is associated with an account, check your inbox
+                and spam folder for the password reset link.
               </p>
             </div>
           </div>
@@ -127,6 +145,7 @@ export default function ForgotPasswordForm() {
               setStatus("idle");
               setErrorType(null);
               setEmailError("");
+              setServerError("");
             }}
             className="mt-5 min-h-12 w-full rounded-[var(--radius-control)] border border-[var(--color-border-strong)] bg-white px-4 text-sm font-bold text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-muted)]"
           >
@@ -135,23 +154,34 @@ export default function ForgotPasswordForm() {
         </div>
       ) : (
         <>
-          {status === "error" && errorType === "network" && (
+          {status === "error" && (
             <div
               role="alert"
               className="mb-5 flex items-start gap-3 rounded-[var(--radius-control)] border border-[var(--color-error-soft)] bg-[var(--color-error-soft)] p-3"
             >
-              <FiWifi
-                size={20}
-                aria-hidden="true"
-                className="mt-0.5 shrink-0 text-[var(--color-error)]"
-              />
+              {errorType === "network" ? (
+                <FiWifi
+                  size={20}
+                  aria-hidden="true"
+                  className="mt-0.5 shrink-0 text-[var(--color-error)]"
+                />
+              ) : (
+                <FiAlertCircle
+                  size={20}
+                  aria-hidden="true"
+                  className="mt-0.5 shrink-0 text-[var(--color-error)]"
+                />
+              )}
 
               <div>
                 <p className="text-sm font-bold text-[var(--color-error)]">
-                  Network error
+                  {errorType === "network"
+                    ? "Connection error"
+                    : "Unable to process request"}
                 </p>
+
                 <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">
-                  Please check your internet connection and try again.
+                  {serverError}
                 </p>
               </div>
             </div>
@@ -224,16 +254,6 @@ export default function ForgotPasswordForm() {
           Back to sign in
         </Link>
       </div>
-
-      {import.meta.env.DEV && status !== "loading" && status !== "success" && (
-        <button
-          type="button"
-          onClick={simulateNetworkError}
-          className="mt-3 block w-full text-center text-xs text-[var(--color-muted)] underline underline-offset-4 hover:text-[var(--color-ink)]"
-        >
-          Preview network error state
-        </button>
-      )}
     </div>
   );
 }
