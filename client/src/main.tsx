@@ -5,10 +5,11 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 
 import App from "./App";
 import { ToastProvider } from "./components/ui/ToastProvider";
-import "./index.css";
-import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from "./context/AuthContext";
+import { CartProvider } from "./context/CartContext";
 import { CheckoutProvider } from "./context/CheckoutContext";
+
+import "./index.css";
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
@@ -23,13 +24,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <GoogleOAuthProvider clientId={googleClientId ?? ""}>
       <BrowserRouter>
         <ToastProvider>
-          <CartProvider>
-            <AuthProvider>
+          <AuthProvider>
+            <CartProvider>
               <CheckoutProvider>
                 <App />
               </CheckoutProvider>
-            </AuthProvider>
-          </CartProvider>
+            </CartProvider>
+          </AuthProvider>
         </ToastProvider>
       </BrowserRouter>
     </GoogleOAuthProvider>

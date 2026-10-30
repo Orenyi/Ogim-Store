@@ -3,6 +3,10 @@ const API_BASE_URL =
 
 let csrfToken: string | null = null;
 
+// ============================================
+// API TYPES
+// ============================================
+
 interface ApiResponse {
   success?: boolean;
   message?: string;
@@ -24,6 +28,94 @@ export interface ResetPasswordPayload {
   password: string;
 }
 
+// ============================================
+// CART API TYPES
+// ============================================
+
+export interface CartApiProduct {
+  _id: string;
+  name: string;
+  slug: string;
+  brand: string;
+  model: string;
+  description?: string;
+  price: number;
+  compareAtPrice?: number;
+  condition: "brand-new" | "uk-used" | "refurbished";
+  stockQuantity: number;
+  status: "draft" | "published" | "archived";
+  images: {
+    url: string;
+    publicId?: string;
+    alt: string;
+  }[];
+  specifications?: {
+    storage?: string;
+    ram?: string;
+    color?: string;
+    display?: string;
+    battery?: string;
+    camera?: string;
+    operatingSystem?: string;
+    network?: string;
+    processor?: string;
+    additionalFeatures?: string[];
+  };
+}
+
+export interface CartApiItem {
+  productId: CartApiProduct;
+  quantity: number;
+  priceAtAddition: number;
+}
+
+export interface CartApiData {
+  _id: string;
+  userId: string;
+  items: CartApiItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CartApiResponse {
+  success: boolean;
+  message?: string;
+  data: CartApiData;
+}
+
+export interface AddCartItemPayload {
+  productId: string;
+  quantity: number;
+}
+
+export interface UpdateCartItemPayload {
+  quantity: number;
+}
+
+// Guest cart merge types
+
+export interface GuestCartItemPayload {
+  productId: string;
+  quantity: number;
+}
+
+export interface MergeGuestCartPayload {
+  items: GuestCartItemPayload[];
+}
+
+export interface RejectedCartItem {
+  productId: string;
+  reason: string;
+}
+
+export interface MergeGuestCartResponse extends CartApiResponse {
+  rejectedItems: RejectedCartItem[];
+}
+
+// ============================================
+// API ERROR
+// ============================================
+
 export class ApiError extends Error {
   public readonly status: number;
   public readonly details?: unknown;
@@ -37,11 +129,17 @@ export class ApiError extends Error {
   }
 }
 
+// ============================================
+// CSRF TOKEN
+// ============================================
+
 export async function getCsrfToken(): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/auth/csrf`, {
     method: "GET",
     credentials: "include",
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+    },
   });
 
   let result: ApiResponse;
@@ -71,11 +169,16 @@ export function clearCsrfToken(): void {
   csrfToken = null;
 }
 
+// ============================================
+// BASE API REQUEST
+// ============================================
+
 export async function apiRequest<T>(
   endpoint: string,
   options?: RequestInit,
 ): Promise<T> {
   const method = (options?.method ?? "GET").toUpperCase();
+
   const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
 
   if (isMutation && !csrfToken) {
@@ -124,7 +227,7 @@ export async function apiRequest<T>(
 }
 
 // ============================================
-// FORGOT PASSWORD
+// AUTHENTICATION
 // ============================================
 
 export async function forgotPassword(
@@ -136,14 +239,87 @@ export async function forgotPassword(
   });
 }
 
-// ============================================
-// RESET PASSWORD
-// ============================================
-
 export async function resetPassword(
   payload: ResetPasswordPayload,
 ): Promise<AuthMessageResponse> {
   return apiRequest<AuthMessageResponse>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// ============================================
+// CUSTOMER CART API
+// ============================================
+
+/**
+ * Fetch the authenticated customer's cart.
+ */
+export async function getCart(): Promise<CartApiResponse> {
+  return apiRequest<CartApiResponse>("/cart");
+}
+
+/**
+ * Add a product to the authenticated customer's cart.
+ */
+export async function addCartItem(
+  payload: AddCartItemPayload,
+): Promise<CartApiResponse> {
+  return apiRequest<CartApiResponse>("/cart/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Update a product's quantity in the cart.
+ */
+export async function updateCartItem(
+  productId: string,
+  payload: UpdateCartItemPayload,
+): Promise<CartApiResponse> {
+  return apiRequest<CartApiResponse>(
+    `/cart/items/${encodeURIComponent(productId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+/**
+ * Remove a product from the authenticated customer's cart.
+ */
+export async function removeCartItem(
+  productId: string,
+): Promise<CartApiResponse> {
+  return apiRequest<CartApiResponse>(
+    `/cart/items/${encodeURIComponent(productId)}`,
+    {
+      method: "DELETE",
+    },
+  );
+}
+
+/**
+ * Clear the authenticated customer's cart.
+ */
+export async function clearCart(): Promise<CartApiResponse> {
+  return apiRequest<CartApiResponse>("/cart", {
+    method: "DELETE",
+  });
+}
+
+/**
+ * Merge a guest's locally stored cart into the authenticated customer's cart.
+ *
+ * The backend validates product availability and stock.
+ * Rejected items are returned separately by the backend.
+ */
+export async function mergeGuestCart(
+  payload: MergeGuestCartPayload,
+): Promise<MergeGuestCartResponse> {
+  return apiRequest<MergeGuestCartResponse>("/cart/merge", {
     method: "POST",
     body: JSON.stringify(payload),
   });

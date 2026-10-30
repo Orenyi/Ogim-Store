@@ -6,6 +6,7 @@ import { connectDatabase } from "./config/database.js";
 import productRoutes from "./routes/product.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import { getBrands } from "./controllers/product.controller.js";
+import cartRoutes from "./routes/cart.routes.js";
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.get("/api/v1/health", (_req, res) => {
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/products", productRoutes);
 app.get("/api/v1/brands", getBrands);
+app.use("/api/v1/cart", cartRoutes);
 
 async function startServer(): Promise<void> {
   try {

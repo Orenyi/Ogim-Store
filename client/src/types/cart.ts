@@ -2,13 +2,15 @@ import type { Product } from "./product";
 
 /**
  * A product stored in the customer's cart.
- * The product itself reuses the existing Product interface.
+ * Product details are populated from the backend or mapped
+ * from the guest cart's local product data.
  */
 export interface CartItem {
   product: Product;
   quantity: number;
   selected: boolean;
-  /** Price when the item was added, used for price-change alerts. */
+
+  /** Server-generated price snapshot when added to the cart. */
   addedPrice: number;
 }
 
@@ -37,9 +39,20 @@ export interface CartTotals {
   total: number;
 }
 
-/** Data saved locally to restore the cart after a page refresh. */
+/** Guest cart persisted in the browser. */
 export interface PersistedCart {
   version: 1;
   items: CartItem[];
   updatedAt: string;
+}
+
+/** Data sent to the backend when merging a guest cart. */
+export interface GuestCartItemPayload {
+  productId: string;
+  quantity: number;
+}
+
+/** Guest cart synchronization payload. */
+export interface GuestCartSyncPayload {
+  items: GuestCartItemPayload[];
 }
