@@ -25,48 +25,52 @@ import ReturnsPage from "./pages/ReturnsPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import TermsPage from "./pages/TermsPage";
 import NotFoundPage from "./pages/NotFoundPage";
+import ScrollToTop from "./components/layout/ScrollToTop";
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<StoreLayout />}>
-        <Route path="/" element={<Homepage />} />
-        <Route path="/shop" element={<ShopPage />} />
-        <Route path="/search" element={<SearchResultsPage />} />
-        <Route path="/products/:slug" element={<ProductDetailsPage />} />
-        <Route path="/cart" element={<CartPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route
-          path="/password-reset-success"
-          element={<PasswordResetSuccessPage />}
-        />
-        <Route element={<ProtectedRoute />}>
-          <Route path="/checkout" element={<CheckoutPage />} />
+    <>
+      <ScrollToTop />
+      <Routes>
+        <Route element={<StoreLayout />}>
+          <Route path="/" element={<Homepage />} />
+          <Route path="/shop" element={<ShopPage />} />
+          <Route path="/search" element={<SearchResultsPage />} />
+          <Route path="/products/:slug" element={<ProductDetailsPage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
-            path="/checkout/confirmation"
-            element={<OrderConfirmationPage />}
+            path="/password-reset-success"
+            element={<PasswordResetSuccessPage />}
           />
-        </Route>
-        <Route path="/account" element={<AccountOverviewPage />} />
-        <Route path="/account" element={<AccountOverviewPage />} />
-        <Route path="/account/orders" element={<AccountOrdersPage />} />
-        <Route
-          path="/account/orders/:orderId"
-          element={<AccountOrderDetailsPage />}
-        />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/contact" element={<ContactPage />} />
-        <Route path="/faq" element={<FAQPage />} />
-        <Route path="/shipping" element={<ShippingPage />} />
-        <Route path="/returns" element={<ReturnsPage />} />
-        <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-        <Route path="/terms" element={<TermsPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route
+              path="/checkout/confirmation"
+              element={<OrderConfirmationPage />}
+            />
+          </Route>
+          <Route path="/account" element={<AccountOverviewPage />} />
+          <Route path="/account" element={<AccountOverviewPage />} />
+          <Route path="/account/orders" element={<AccountOrdersPage />} />
+          <Route
+            path="/account/orders/:orderId"
+            element={<AccountOrderDetailsPage />}
+          />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/faq" element={<FAQPage />} />
+          <Route path="/shipping" element={<ShippingPage />} />
+          <Route path="/returns" element={<ReturnsPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
 
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    </Routes>
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
+    </>
   );
 }

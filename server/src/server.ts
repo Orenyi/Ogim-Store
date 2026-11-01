@@ -7,6 +7,8 @@ import productRoutes from "./routes/product.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import { getBrands } from "./controllers/product.controller.js";
 import cartRoutes from "./routes/cart.routes.js";
+import orderRoutes from "./routes/order.routes.js";
+import { startOrderExpirationWorker } from "./workers/order-expiration.worker.js";
 
 const app = express();
 
@@ -35,10 +37,14 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/products", productRoutes);
 app.get("/api/v1/brands", getBrands);
 app.use("/api/v1/cart", cartRoutes);
+app.use("/api/v1/orders", orderRoutes);
 
 async function startServer(): Promise<void> {
   try {
     await connectDatabase();
+
+    // Start background order expiration processing.
+    startOrderExpirationWorker();
 
     app.listen(env.PORT, () => {
       console.log(`Ogim Store API running on http://localhost:${env.PORT}`);

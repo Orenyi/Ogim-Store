@@ -2,6 +2,7 @@ import {
   FiArrowLeft,
   FiCheckCircle,
   FiEdit2,
+  FiLoader,
   FiMapPin,
   FiPackage,
   FiTruck,
@@ -11,10 +12,11 @@ import { useCart } from "../../hooks/useCart";
 import { useCheckout } from "../../context/CheckoutContext";
 
 interface OrderReviewProps {
-  onPlaceOrder: () => void;
+  onPlaceOrder: () => void | Promise<void>;
   onEditContact: () => void;
   onEditDelivery: () => void;
   onBack?: () => void;
+  isSubmitting?: boolean;
 }
 
 const formatNaira = (amount: number) =>
@@ -35,6 +37,7 @@ export default function OrderReview({
   onEditContact,
   onEditDelivery,
   onBack,
+  isSubmitting = false,
 }: OrderReviewProps) {
   const { items, selectedSubtotal, selectedItemCount, isHydrated } = useCart();
 
@@ -60,6 +63,12 @@ export default function OrderReview({
     selectedItems.length > 0 &&
     hasContactDetails &&
     Boolean(selectedDeliveryOption);
+
+  function handlePlaceOrder() {
+    if (!canPlaceOrder || isSubmitting) return;
+
+    void onPlaceOrder();
+  }
 
   if (!isHydrated) {
     return (
@@ -103,6 +112,7 @@ export default function OrderReview({
       )}
 
       <div className="space-y-5">
+        {/* CONTACT AND DELIVERY ADDRESS */}
         <section className="rounded-[var(--radius-control)] border border-[var(--color-border)] p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -119,7 +129,8 @@ export default function OrderReview({
             <button
               type="button"
               onClick={onEditContact}
-              className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              disabled={isSubmitting}
+              className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <FiEdit2 size={13} aria-hidden="true" />
               Edit
@@ -162,6 +173,7 @@ export default function OrderReview({
           )}
         </section>
 
+        {/* DELIVERY METHOD */}
         <section className="rounded-[var(--radius-control)] border border-[var(--color-border)] p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -178,7 +190,8 @@ export default function OrderReview({
             <button
               type="button"
               onClick={onEditDelivery}
-              className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              disabled={isSubmitting}
+              className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <FiEdit2 size={13} aria-hidden="true" />
               Edit
@@ -207,6 +220,7 @@ export default function OrderReview({
           )}
         </section>
 
+        {/* SELECTED ITEMS */}
         <section className="rounded-[var(--radius-control)] border border-[var(--color-border)] p-4">
           <div className="flex items-center gap-2">
             <FiPackage
@@ -267,6 +281,7 @@ export default function OrderReview({
           )}
         </section>
 
+        {/* ORDER SUMMARY */}
         <section
           aria-label="Order total"
           className="rounded-[var(--radius-control)] bg-[var(--color-surface-muted)] p-4"
@@ -294,10 +309,16 @@ export default function OrderReview({
                 {formatNaira(total)}
               </span>
             </div>
+
+            <p className="text-xs leading-5 text-[var(--color-muted)]">
+              Estimated total. Final prices and delivery charges are calculated
+              and validated by the server when you place your order.
+            </p>
           </div>
         </section>
       </div>
 
+      {/* ORDER NOTICE */}
       <div className="mt-5 flex items-start gap-3 rounded-[var(--radius-control)] border border-[var(--color-border)] p-3.5">
         <FiCheckCircle
           className="mt-0.5 shrink-0 text-[var(--color-success)]"
@@ -305,17 +326,19 @@ export default function OrderReview({
           aria-hidden="true"
         />
         <p className="text-xs leading-5 text-[var(--color-muted)]">
-          Review your details carefully. Your order will not be confirmed and no
-          payment will be taken until the payment integration is implemented.
+          Placing your order creates a pending order and temporarily reserves
+          the selected items. Payment has not yet been taken or verified.
         </p>
       </div>
 
+      {/* ACTIONS */}
       <div className="mt-7 flex flex-col-reverse gap-3 border-t border-[var(--color-border)] pt-5 sm:flex-row sm:justify-between">
         {onBack ? (
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-5 text-sm font-bold text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2"
+            disabled={isSubmitting}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-5 text-sm font-bold text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FiArrowLeft size={16} aria-hidden="true" />
             Back
@@ -326,11 +349,22 @@ export default function OrderReview({
 
         <button
           type="button"
-          onClick={onPlaceOrder}
-          disabled={!canPlaceOrder}
+          onClick={handlePlaceOrder}
+          disabled={!canPlaceOrder || isSubmitting}
+          aria-busy={isSubmitting}
           className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-accent)] px-6 text-sm font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Review complete
+          {isSubmitting ? (
+            <>
+              <FiLoader size={17} className="animate-spin" aria-hidden="true" />
+              Creating order...
+            </>
+          ) : (
+            <>
+              Place order
+              <FiCheckCircle size={17} aria-hidden="true" />
+            </>
+          )}
         </button>
       </div>
     </section>

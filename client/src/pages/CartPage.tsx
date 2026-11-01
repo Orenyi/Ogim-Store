@@ -1,7 +1,11 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+
 import { FiArrowLeft, FiTrash2, FiChevronRight } from "react-icons/fi";
+
 import { useCart } from "../hooks/useCart";
 import { useToast } from "../components/ui/ToastProvider";
+import { useAuth } from "../context/AuthContext";
+
 import CartBenefits from "../components/cart/CartBenefits";
 import CartEmptyState from "../components/cart/CartEmptyState";
 import CartItemList from "../components/cart/CartItemList";
@@ -11,15 +15,43 @@ import CartRecommendations from "../components/cart/CartRecommendations";
 import CartSkeleton from "../components/cart/CartSkeleton";
 
 export default function CartPage() {
+  const navigate = useNavigate();
+
   const { items, lineCount, clearCart, isHydrated } = useCart();
+
+  const { user, isLoading: isAuthLoading } = useAuth();
+
   const toast = useToast();
 
   const isEmpty = items.length === 0;
+  const isAuthenticated = Boolean(user);
 
   function handleCheckout() {
-    toast.info(
-      "Account-required checkout will be connected in the authentication step.",
-    );
+    if (!isHydrated || isAuthLoading) {
+      toast.info("Please wait while your account and cart are loading.");
+      return;
+    }
+
+    if (!isAuthenticated) {
+      toast.info("Please sign in to continue to checkout.");
+
+      navigate("/login", {
+        state: {
+          from: "/checkout",
+        },
+      });
+
+      return;
+    }
+
+    const hasSelectedItems = items.some((item) => item.selected);
+
+    if (!hasSelectedItems) {
+      toast.warning("Please select at least one item to proceed to checkout.");
+      return;
+    }
+
+    navigate("/checkout");
   }
 
   return (
@@ -35,7 +67,9 @@ export default function CartPage() {
           >
             Home
           </Link>
+
           <FiChevronRight size={14} aria-hidden="true" />
+
           <span
             aria-current="page"
             className="font-medium text-[var(--color-ink)]"
@@ -57,6 +91,7 @@ export default function CartPage() {
               <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
                 Your Cart ({lineCount} {lineCount === 1 ? "item" : "items"})
               </h1>
+
               <p className="mt-2 text-sm text-[var(--color-muted)] sm:text-base">
                 Review your items before checkout.
               </p>
@@ -65,6 +100,7 @@ export default function CartPage() {
             <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
               <div className="min-w-0 space-y-4">
                 <CartItemList />
+
                 <CartPriceAlert />
 
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
@@ -89,6 +125,7 @@ export default function CartPage() {
 
               <aside className="min-w-0 space-y-4 lg:sticky lg:top-24">
                 <CartOrderSummary onCheckout={handleCheckout} />
+
                 <CartBenefits />
               </aside>
             </div>

@@ -4,7 +4,7 @@ const API_BASE_URL =
 let csrfToken: string | null = null;
 
 // ============================================
-// API TYPES
+// GENERAL API TYPES
 // ============================================
 
 interface ApiResponse {
@@ -92,8 +92,6 @@ export interface UpdateCartItemPayload {
   quantity: number;
 }
 
-// Guest cart merge types
-
 export interface GuestCartItemPayload {
   productId: string;
   quantity: number;
@@ -110,6 +108,91 @@ export interface RejectedCartItem {
 
 export interface MergeGuestCartResponse extends CartApiResponse {
   rejectedItems: RejectedCartItem[];
+}
+
+// ============================================
+// ORDER API TYPES
+// ============================================
+
+export type OrderDeliveryMethod = "standard" | "express" | "same-day";
+
+export type OrderCondition = "brand-new" | "uk-used" | "refurbished";
+
+export type OrderStatus =
+  | "pending"
+  | "confirmed"
+  | "cancelled"
+  | "expired"
+  | "fulfilled";
+
+export type OrderPaymentStatus = "pending" | "paid" | "failed" | "refunded";
+
+export interface CreateOrderItemPayload {
+  productId: string;
+  quantity: number;
+}
+
+export interface OrderDeliveryAddressPayload {
+  fullName: string;
+  email: string;
+  phone: string;
+  state: string;
+  city: string;
+  address: string;
+  instructions?: string;
+}
+
+export interface CreateOrderPayload {
+  items: CreateOrderItemPayload[];
+  deliveryAddress: OrderDeliveryAddressPayload;
+  deliveryMethod: OrderDeliveryMethod;
+}
+
+export interface OrderApiItem {
+  productId: string;
+  name: string;
+  slug: string;
+  brand: string;
+  model: string;
+  condition: OrderCondition;
+  image: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface OrderApiRecord {
+  _id: string;
+  orderNumber: string;
+  userId: string;
+  items: OrderApiItem[];
+  deliveryAddress: OrderDeliveryAddressPayload;
+  deliveryMethod: OrderDeliveryMethod;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  currency: "NGN";
+  status: OrderStatus;
+  paymentStatus: OrderPaymentStatus;
+  reservationExpiresAt: string;
+  stockRestoredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateOrderResponse {
+  success: boolean;
+  message: string;
+  data: {
+    order: OrderApiRecord;
+    reservationExpiresAt: string;
+  };
+}
+
+export interface CancelOrderResponse {
+  success: boolean;
+  message: string;
+  data: OrderApiRecord;
 }
 
 // ============================================
@@ -312,9 +395,6 @@ export async function clearCart(): Promise<CartApiResponse> {
 
 /**
  * Merge a guest's locally stored cart into the authenticated customer's cart.
- *
- * The backend validates product availability and stock.
- * Rejected items are returned separately by the backend.
  */
 export async function mergeGuestCart(
   payload: MergeGuestCartPayload,
@@ -323,4 +403,39 @@ export async function mergeGuestCart(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+// ============================================
+// CUSTOMER ORDER API
+// ============================================
+
+/**
+ * Create a pending order from the customer's cart.
+ *
+ * The backend calculates product prices, subtotal,
+ * delivery fee and total. Never send frontend prices.
+ */
+export async function createOrder(
+  payload: CreateOrderPayload,
+): Promise<CreateOrderResponse> {
+  return apiRequest<CreateOrderResponse>("/orders", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Cancel a pending order.
+ *
+ * The backend handles cancellation and stock restoration.
+ */
+export async function cancelOrder(
+  orderId: string,
+): Promise<CancelOrderResponse> {
+  return apiRequest<CancelOrderResponse>(
+    `/orders/${encodeURIComponent(orderId)}/cancel`,
+    {
+      method: "POST",
+    },
+  );
 }

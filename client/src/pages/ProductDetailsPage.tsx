@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   FiArrowLeft,
   FiAlertCircle,
@@ -80,6 +80,7 @@ function getProductSpecifications(product: Product) {
 
 export default function ProductDetailsPage() {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const { addToCart } = useCart();
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -431,7 +432,7 @@ export default function ProductDetailsPage() {
               onAddToCart={addToCart}
               onBuyNow={(selectedProduct, quantity) => {
                 addToCart(selectedProduct, quantity);
-                // Checkout navigation will be connected in the authentication step.
+                navigate("/cart");
               }}
             />
           </div>

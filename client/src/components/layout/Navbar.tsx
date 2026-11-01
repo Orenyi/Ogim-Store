@@ -6,10 +6,7 @@ import ogimLogo from "../../assets/images/ogim_logo.webp";
 import MobileMenu from "./MobileMenu";
 import SearchSuggestions from "../search/SearchSuggestions";
 import { useAuth } from "../../context/AuthContext";
-
-type NavbarProps = {
-  cartCount?: number;
-};
+import { useCart } from "../../hooks/useCart";
 
 const desktopLinks = [
   { label: "Shop", to: "/shop" },
@@ -18,8 +15,10 @@ const desktopLinks = [
   { label: "Deals", to: "/shop?sort=price-low" },
 ];
 
-export default function Navbar({ cartCount = 0 }: NavbarProps) {
+export default function Navbar() {
   const { isAuthenticated } = useAuth();
+  const { itemCount, isHydrated } = useCart();
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -89,7 +88,6 @@ export default function Navbar({ cartCount = 0 }: NavbarProps) {
             />
           </Link>
 
-          {/* Desktop navigation */}
           {/* Desktop navigation */}
           <nav
             aria-label="Main navigation"
@@ -210,14 +208,18 @@ export default function Navbar({ cartCount = 0 }: NavbarProps) {
 
             <Link
               to="/cart"
-              aria-label={`Shopping cart, ${cartCount} items`}
+              aria-label={`Shopping cart, ${itemCount} items`}
+              aria-busy={!isHydrated}
               className="relative grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-[var(--color-paper)]"
             >
               <FiShoppingCart size={19} aria-hidden="true" />
 
-              {cartCount > 0 && (
-                <span className="absolute right-0 top-0 grid min-h-4 min-w-4 place-items-center rounded-full bg-[var(--color-accent)] px-1 text-[9px] font-bold leading-none text-white">
-                  {cartCount > 99 ? "99+" : cartCount}
+              {itemCount > 0 && (
+                <span
+                  className="absolute right-0 top-0 grid min-h-4 min-w-4 place-items-center rounded-full bg-[var(--color-accent)] px-1 text-[9px] font-bold leading-none text-white"
+                  aria-hidden="true"
+                >
+                  {itemCount > 99 ? "99+" : itemCount}
                 </span>
               )}
             </Link>

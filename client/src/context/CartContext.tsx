@@ -78,6 +78,9 @@ export interface CartContextValue {
   removeSelectedItems: () => void;
   clearCart: () => void;
   dismissPriceChange: (productId: string) => void;
+
+  // Refreshes the authenticated customer's cart from the backend.
+  refreshCart: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
@@ -592,6 +595,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   }, [state.items]);
 
+  /**
+   * Public cart refresh method.
+   *
+   * Used after order creation so the frontend reflects the quantities
+   * remaining in the customer's MongoDB cart.
+   *
+   * This does not clear the entire cart. The backend determines which
+   * purchased quantities have been removed.
+   */
+  const refreshCart = useCallback(async () => {
+    if (!isAuthenticated) {
+      throw new Error("You must be signed in to refresh your cart.");
+    }
+
+    await refreshServerCart();
+  }, [isAuthenticated, refreshServerCart]);
+
   // ============================================
   // ADD TO CART
   // ============================================
@@ -1010,6 +1030,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       removeSelectedItems,
       clearCart,
       dismissPriceChange,
+      refreshCart,
     }),
     [
       state.items,
@@ -1027,6 +1048,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       removeSelectedItems,
       clearCart,
       dismissPriceChange,
+      refreshCart,
     ],
   );
 
