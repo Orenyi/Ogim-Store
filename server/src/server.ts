@@ -9,6 +9,7 @@ import { getBrands } from "./controllers/product.controller.js";
 import cartRoutes from "./routes/cart.routes.js";
 import orderRoutes from "./routes/order.routes.js";
 import { startOrderExpirationWorker } from "./workers/order-expiration.worker.js";
+import paystackWebhookRoutes from "./routes/paystack-webhook.routes.js";
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use(
     allowedHeaders: ["Content-Type", "X-CSRF-Token", "Authorization"],
   }),
 );
+app.use("/api/v1/payments/paystack/webhook", paystackWebhookRoutes);
 
 app.use(express.json({ limit: "20kb" }));
 app.use(cookieParser());

@@ -174,6 +174,11 @@ export interface OrderApiRecord {
   currency: "NGN";
   status: OrderStatus;
   paymentStatus: OrderPaymentStatus;
+
+  // Canonical payment identifiers returned by the backend.
+  paidPaymentId: string | null;
+  paymentReference: string | null;
+
   reservationExpiresAt: string;
   stockRestoredAt: string | null;
   createdAt: string;
@@ -193,6 +198,52 @@ export interface CancelOrderResponse {
   success: boolean;
   message: string;
   data: OrderApiRecord;
+}
+
+// ============================================
+// PAYSTACK PAYMENT TYPES
+// ============================================
+
+export interface InitializePaymentResponse {
+  success: boolean;
+  message: string;
+  data: {
+    orderId: string;
+    orderNumber: string;
+    reference: string;
+    amount: number;
+    currency: "NGN";
+    authorizationUrl: string;
+    reservationExpiresAt: string;
+  };
+}
+
+export type PaymentAttemptStatus =
+  | "initializing"
+  | "pending"
+  | "success"
+  | "failed"
+  | "abandoned"
+  | "expired"
+  | "refunded";
+
+export interface PaymentVerificationData {
+  verified: boolean;
+  paymentStatus: PaymentAttemptStatus;
+  orderStatus: OrderStatus;
+  orderId: string;
+  orderNumber: string;
+  reference: string;
+  amount: number;
+  currency: "NGN";
+  message: string;
+  order: OrderApiRecord;
+}
+
+export interface PaymentVerificationResponse {
+  success: boolean;
+  message: string;
+  data: PaymentVerificationData;
 }
 
 // ============================================
@@ -422,6 +473,45 @@ export async function createOrder(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+/**
+ * Initialize Paystack payment for an existing pending order.
+ *
+ * The backend retrieves the order and calculates the
+ * authoritative payment amount. Never send an amount
+ * from the frontend.
+ */
+export async function initializeOrderPayment(
+  orderId: string,
+): Promise<InitializePaymentResponse> {
+  return apiRequest<InitializePaymentResponse>(
+    `/orders/${encodeURIComponent(orderId)}/pay`,
+    {
+      method: "POST",
+    },
+  );
+}
+
+/**
+ * Verify a Paystack payment and retrieve the complete order.
+ *
+ * The backend independently contacts Paystack and validates
+ * the transaction reference, amount and currency.
+ *
+ * The frontend must never mark an order as paid independently.
+ */
+export async function verifyOrderPayment(
+  orderId: string,
+  reference: string,
+): Promise<PaymentVerificationResponse> {
+  return apiRequest<PaymentVerificationResponse>(
+    `/orders/${encodeURIComponent(orderId)}/verify-payment`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reference }),
+    },
+  );
 }
 
 /**

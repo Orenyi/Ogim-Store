@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import OrderModel from "../models/Order.js";
 import CartModel from "../models/Cart.js";
 import ProductModel from "../models/product.model.js";
+import Payment from "../models/Payment.js";
 
 import type { CreateOrderInput } from "../validators/order.validation.js";
 
@@ -315,6 +316,8 @@ export async function createPendingOrder(
             currency: "NGN",
             status: "pending",
             paymentStatus: "pending",
+            paidPaymentId: null,
+            paymentReference: null,
             reservationExpiresAt,
             stockRestoredAt: null,
           },
@@ -389,7 +392,7 @@ export async function createPendingOrder(
 }
 
 // ============================================
-// RESTORE RESERVED STOCK
+// RESTORE RESERVED STOCK AND CLOSE PAYMENT ATTEMPTS
 // ============================================
 
 async function restoreOrderStock(
@@ -410,10 +413,16 @@ async function restoreOrderStock(
 
   try {
     await session.withTransaction(async () => {
-      // Only one request can change a pending order and restore its stock.
+      // ============================================
+      // 1. CLAIM ORDER FOR STOCK RESTORATION
+      // ============================================
+      // Only one transaction can change a pending order
+      // and restore its reserved stock.
+
       const filter: Record<string, unknown> = {
         _id: orderId,
         status: "pending",
+        paymentStatus: "pending",
         stockRestoredAt: null,
       };
 
@@ -425,12 +434,14 @@ async function restoreOrderStock(
         filter.reservationExpiresAt = { $lte: new Date() };
       }
 
+      const now = new Date();
+
       const order = await OrderModel.findOneAndUpdate(
         filter,
         {
           $set: {
             status: nextStatus,
-            stockRestoredAt: new Date(),
+            stockRestoredAt: now,
           },
         },
         {
@@ -448,7 +459,41 @@ async function restoreOrderStock(
         );
       }
 
-      // Restore every reserved product quantity.
+      // ============================================
+      // 2. CLOSE ACTIVE PAYMENT ATTEMPTS
+      // ============================================
+      // These attempts are closed locally, not deleted.
+      // The verification service must still be allowed to
+      // check them with Paystack for a possible late charge.
+
+      const closedPaymentStatus =
+        nextStatus === "cancelled" ? "abandoned" : "expired";
+
+      await Payment.updateMany(
+        {
+          orderId: order._id,
+          activeAttempt: true,
+          status: {
+            $in: ["initializing", "pending"],
+          },
+        },
+        {
+          $set: {
+            status: closedPaymentStatus,
+            activeAttempt: false,
+            failureReason:
+              nextStatus === "cancelled"
+                ? "Order was cancelled before payment completion. A later successful Paystack charge requires reconciliation."
+                : "Order reservation expired before payment completion. A later successful Paystack charge requires reconciliation.",
+          },
+        },
+        { session },
+      );
+
+      // ============================================
+      // 3. RESTORE RESERVED PRODUCT STOCK
+      // ============================================
+
       for (const item of order.items) {
         const result = await ProductModel.updateOne(
           {
@@ -524,6 +569,7 @@ async function expirePendingOrder(orderId: string) {
 export async function expirePendingOrders(): Promise<number> {
   const expiredCandidates = await OrderModel.find({
     status: "pending",
+    paymentStatus: "pending",
     stockRestoredAt: null,
     reservationExpiresAt: { $lte: new Date() },
   })
@@ -540,7 +586,8 @@ export async function expirePendingOrders(): Promise<number> {
 
       expiredCount += 1;
     } catch (error: unknown) {
-      // Another worker may already have cancelled or expired this order.
+      // Another worker or request may already have cancelled,
+      // expired or paid for this order.
       if (error instanceof OrderServiceError && error.statusCode === 409) {
         continue;
       }

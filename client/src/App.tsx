@@ -54,7 +54,7 @@ export default function App() {
             />
           </Route>
           <Route path="/account" element={<AccountOverviewPage />} />
-          <Route path="/account" element={<AccountOverviewPage />} />
+
           <Route path="/account/orders" element={<AccountOrdersPage />} />
           <Route
             path="/account/orders/:orderId"

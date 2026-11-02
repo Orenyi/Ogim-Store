@@ -9,7 +9,10 @@ import OrderReview from "../components/checkout/OrderReview";
 
 import { useCheckout, type CheckoutStep } from "../context/CheckoutContext";
 import { useCart } from "../hooks/useCart";
-import { createOrder } from "../lib/api";
+
+import { ApiError, createOrder, initializeOrderPayment } from "../lib/api";
+
+const PENDING_ORDER_STORAGE_KEY = "ogim_pending_payment_order_id";
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
@@ -22,13 +25,21 @@ export default function CheckoutPage() {
   const [orderError, setOrderError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Prevent duplicate order requests from repeated clicks.
+  const [pendingOrderId, setPendingOrderId] = useState(
+    () => sessionStorage.getItem(PENDING_ORDER_STORAGE_KEY) ?? "",
+  );
+
   const submissionInProgress = useRef(false);
 
   function goToStep(step: CheckoutStep) {
     setOrderError("");
     setCurrentStep(step);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function clearPendingOrder() {
+    sessionStorage.removeItem(PENDING_ORDER_STORAGE_KEY);
+    setPendingOrderId("");
   }
 
   async function handlePlaceOrder() {
@@ -41,89 +52,181 @@ export default function CheckoutPage() {
       return;
     }
 
-    const selectedItems = items.filter((item) => item.selected);
-
-    if (selectedItems.length === 0) {
-      setOrderError(
-        "Please select at least one item before placing your order.",
-      );
-      return;
-    }
-
-    if (
-      !contactDetails.fullName ||
-      !contactDetails.email ||
-      !contactDetails.phone ||
-      !contactDetails.state ||
-      !contactDetails.city ||
-      !contactDetails.address
-    ) {
-      setOrderError(
-        "Please complete your delivery information before placing your order.",
-      );
-      return;
-    }
-
-    if (!deliveryMethod) {
-      setOrderError("Please select a delivery method.");
-      return;
-    }
-
     submissionInProgress.current = true;
     setIsSubmitting(true);
 
+    let redirectingToPaystack = false;
+
     try {
-      const response = await createOrder({
-        items: selectedItems.map((item) => ({
-          productId: item.product.id,
-          quantity: item.quantity,
-        })),
+      let orderId = pendingOrderId;
 
-        deliveryAddress: {
-          fullName: contactDetails.fullName.trim(),
-          email: contactDetails.email.trim(),
-          phone: contactDetails.phone.trim(),
-          state: contactDetails.state.trim(),
-          city: contactDetails.city.trim(),
-          address: contactDetails.address.trim(),
-          instructions: contactDetails.instructions?.trim() ?? "",
-        },
+      // ============================================
+      // 1. CREATE A NEW ORDER IF NONE EXISTS
+      // ============================================
 
-        deliveryMethod,
-      });
+      if (!orderId) {
+        const selectedItems = items.filter((item) => item.selected);
 
-      const order = response.data.order;
-      const reservationExpiresAt = response.data.reservationExpiresAt;
+        if (selectedItems.length === 0) {
+          throw new Error(
+            "Your cart has no selected items. Please return to the shop, add products to your cart and try again.",
+          );
+        }
 
-      // The backend has already created the order and updated the cart.
-      // Refresh the frontend cart to reflect the remaining quantities.
-      try {
-        await refreshCart();
-      } catch (refreshError) {
-        console.error("Order created, but cart refresh failed:", refreshError);
+        if (
+          !contactDetails.fullName?.trim() ||
+          !contactDetails.email?.trim() ||
+          !contactDetails.phone?.trim() ||
+          !contactDetails.state?.trim() ||
+          !contactDetails.city?.trim() ||
+          !contactDetails.address?.trim()
+        ) {
+          throw new Error(
+            "Please complete your delivery information before placing your order.",
+          );
+        }
+
+        if (!deliveryMethod) {
+          throw new Error("Please select a delivery method.");
+        }
+
+        const response = await createOrder({
+          items: selectedItems.map((item) => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+          })),
+
+          deliveryAddress: {
+            fullName: contactDetails.fullName.trim(),
+            email: contactDetails.email.trim(),
+            phone: contactDetails.phone.trim(),
+            state: contactDetails.state.trim(),
+            city: contactDetails.city.trim(),
+            address: contactDetails.address.trim(),
+            instructions: contactDetails.instructions?.trim() ?? "",
+          },
+
+          deliveryMethod,
+        });
+
+        orderId = response.data.order._id;
+
+        if (!orderId) {
+          throw new Error(
+            "Your order was created, but the server did not return an order ID. Please contact support.",
+          );
+        }
+
+        // Persist the order ID before initializing payment.
+        sessionStorage.setItem(PENDING_ORDER_STORAGE_KEY, orderId);
+        setPendingOrderId(orderId);
+
+        // The backend removes purchased items from the cart.
+        try {
+          await refreshCart();
+        } catch (refreshError) {
+          console.error(
+            "Order created, but cart refresh failed:",
+            refreshError,
+          );
+        }
       }
 
-      // Pass the actual backend order to the confirmation page.
-      navigate("/checkout/confirmation", {
-        replace: true,
-        state: {
-          order,
-          reservationExpiresAt,
-        },
-      });
-    } catch (error) {
-      console.error("Order creation failed:", error);
+      // ============================================
+      // 2. INITIALIZE PAYSTACK PAYMENT
+      // ============================================
+
+      let paymentResponse;
+
+      try {
+        paymentResponse = await initializeOrderPayment(orderId);
+      } catch (error) {
+        if (
+          error instanceof ApiError &&
+          error.status === 409 &&
+          /no longer available for payment|already been paid/i.test(
+            error.message,
+          )
+        ) {
+          const orderAlreadyPaid = /already been paid/i.test(error.message);
+
+          clearPendingOrder();
+
+          if (orderAlreadyPaid) {
+            throw new Error(
+              "This previous order has already been paid for. Your saved checkout reference has been cleared. If you want to make another purchase, add your new products to your cart and place a new order.",
+            );
+          }
+
+          throw new Error(
+            "Your previous order has expired and can no longer be paid for. Please return to the shop, add your products to your cart again, and create a new order.",
+          );
+        }
+
+        throw error;
+      }
+
+      // ============================================
+      // 3. VALIDATE PAYSTACK CHECKOUT URL
+      // ============================================
+
+      const authorizationUrl = paymentResponse.data.authorizationUrl;
+
+      if (!authorizationUrl) {
+        throw new Error(
+          "Paystack did not return a checkout URL. Please try again.",
+        );
+      }
+
+      let checkoutUrl: URL;
+
+      try {
+        checkoutUrl = new URL(authorizationUrl);
+      } catch {
+        throw new Error(
+          "Paystack returned an invalid checkout URL. Please contact support.",
+        );
+      }
+
+      if (
+        checkoutUrl.protocol !== "https:" ||
+        checkoutUrl.hostname !== "checkout.paystack.com"
+      ) {
+        throw new Error(
+          "Paystack returned an untrusted checkout URL. Please contact support.",
+        );
+      }
+
+      // ============================================
+      // 4. REDIRECT TO PAYSTACK
+      // ============================================
+
+      redirectingToPaystack = true;
+
+      window.location.assign(checkoutUrl.toString());
+    } catch (error: unknown) {
+      console.error("Checkout payment initialization failed:", error);
 
       setOrderError(
         error instanceof Error
           ? error.message
-          : "We couldn't create your order. Please try again.",
+          : "We couldn't initialize your payment. Please try again.",
       );
     } finally {
-      submissionInProgress.current = false;
-      setIsSubmitting(false);
+      if (!redirectingToPaystack) {
+        submissionInProgress.current = false;
+        setIsSubmitting(false);
+      }
     }
   }
+
+  const isPreviousOrderPaid = orderError.includes(
+    "previous order has already been paid",
+  );
+
+  const isPreviousOrderExpired = orderError.includes(
+    "previous order has expired",
+  );
 
   return (
     <CheckoutLayout
@@ -170,6 +273,26 @@ export default function CheckoutPage() {
               <p className="text-sm leading-6 text-[var(--color-error)]">
                 {orderError}
               </p>
+
+              {isPreviousOrderPaid && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/account/orders")}
+                  className="mt-3 text-sm font-bold text-[var(--color-accent)] underline underline-offset-4"
+                >
+                  View my orders
+                </button>
+              )}
+
+              {isPreviousOrderExpired && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/shop")}
+                  className="mt-3 text-sm font-bold text-[var(--color-accent)] underline underline-offset-4"
+                >
+                  Return to shop
+                </button>
+              )}
             </div>
           )}
 
@@ -179,8 +302,11 @@ export default function CheckoutPage() {
               className="mt-4 flex items-center gap-3 rounded-[var(--radius-control)] border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4"
             >
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-stone)] border-t-[var(--color-accent)]" />
+
               <p className="text-sm text-[var(--color-muted)]">
-                Creating your order and reserving your items...
+                {pendingOrderId
+                  ? "Connecting to Paystack securely..."
+                  : "Creating your order and preparing payment..."}
               </p>
             </div>
           )}

@@ -67,13 +67,48 @@ const orderItemSchema = new Schema(
 
 const deliveryAddressSchema = new Schema(
   {
-    fullName: { type: String, required: true, trim: true },
-    email: { type: String, required: true, trim: true, lowercase: true },
-    phone: { type: String, required: true, trim: true },
-    state: { type: String, required: true, trim: true },
-    city: { type: String, required: true, trim: true },
-    address: { type: String, required: true, trim: true },
-    instructions: { type: String, trim: true, default: "" },
+    fullName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    email: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
+    },
+
+    phone: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    state: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    city: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    address: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    instructions: {
+      type: String,
+      trim: true,
+      default: "",
+    },
   },
   { _id: false },
 );
@@ -151,6 +186,25 @@ const orderSchema = new Schema(
       required: true,
     },
 
+    // ============================================
+    // CANONICAL SUCCESSFUL PAYMENT
+    // ============================================
+
+    // Identifies the exact Payment document that paid this order.
+    // Optional for compatibility with existing orders.
+    paidPaymentId: {
+      type: Schema.Types.ObjectId,
+      ref: "Payment",
+      default: null,
+    },
+
+    // Paystack reference belonging to the canonical payment.
+    paymentReference: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+
     reservationExpiresAt: {
       type: Date,
       required: true,
@@ -167,10 +221,21 @@ const orderSchema = new Schema(
   },
 );
 
-// Common order lookup patterns.
+// ============================================
+// INDEXES
+// ============================================
+
 orderSchema.index({ userId: 1, createdAt: -1 });
 orderSchema.index({ status: 1, reservationExpiresAt: 1 });
 orderSchema.index({ orderNumber: 1 }, { unique: true });
+
+// Find orders by their successful payment reference.
+orderSchema.index(
+  { paymentReference: 1 },
+  {
+    sparse: true,
+  },
+);
 
 const OrderModel =
   mongoose.models.Order || mongoose.model("Order", orderSchema);

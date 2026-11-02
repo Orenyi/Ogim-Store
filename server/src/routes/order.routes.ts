@@ -2,6 +2,10 @@ import { Router } from "express";
 
 import { createOrder, cancelOrder } from "../controllers/order.controller.js";
 
+import { initializePayment } from "../controllers/payment.controller.js";
+
+import { verifyPayment } from "../controllers/payment-verification.controller.js";
+
 import { requireCustomerAuth } from "../middleware/customer-auth.middleware.js";
 import { validateBody } from "../middleware/validate.middleware.js";
 
@@ -9,11 +13,17 @@ import { createOrderSchema } from "../validators/order.validation.js";
 
 const router = Router();
 
-// All order endpoints require authentication.
+// All order endpoints require customer authentication.
 router.use(requireCustomerAuth);
 
 // POST /api/v1/orders
 router.post("/", validateBody(createOrderSchema), createOrder);
+
+// POST /api/v1/orders/:orderId/pay
+router.post("/:orderId/pay", initializePayment);
+
+// POST /api/v1/orders/:orderId/verify-payment
+router.post("/:orderId/verify-payment", verifyPayment);
 
 // POST /api/v1/orders/:orderId/cancel
 router.post("/:orderId/cancel", cancelOrder);
