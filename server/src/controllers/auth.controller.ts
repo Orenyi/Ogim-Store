@@ -10,6 +10,7 @@ import {
   rotateRefreshToken,
   requestPasswordReset,
   resetCustomerPassword,
+  deleteCustomerAccount,
 } from "../services/auth.service.js";
 
 import type { AuthenticatedRequest } from "../middleware/customer-auth.middleware.js";
@@ -269,6 +270,55 @@ export async function logout(req: Request, res: Response): Promise<void> {
   });
 }
 
+/**
+ * Permanently deactivates a customer's account while preserving
+ * their orders, payments and transaction history.
+ */
+export async function deleteAccount(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.authUser) {
+    res.status(401).json({
+      success: false,
+      message: "Authentication required.",
+    });
+    return;
+  }
+
+  if (req.authUser.role !== "customer") {
+    res.status(403).json({
+      success: false,
+      message: "Only customer accounts can be deleted here.",
+    });
+    return;
+  }
+
+  try {
+    await deleteCustomerAccount(req.authUser.userId);
+
+    // Clear browser authentication cookies after successful deletion.
+    clearSessionCookies(res);
+    res.clearCookie("ogim_csrf", csrfCookieOptions);
+
+    res.status(200).json({
+      success: true,
+      message:
+        "Your account has been deleted successfully. Your order and payment records have been preserved.",
+    });
+  } catch (error) {
+    console.error("Account deletion failed:", error);
+
+    res.status(400).json({
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Unable to delete your account. Please try again.",
+    });
+  }
+}
+
 export async function googleLogin(req: Request, res: Response): Promise<void> {
   const parsed = googleLoginSchema.safeParse(req.body);
 
@@ -380,7 +430,6 @@ export async function resetPassword(
   try {
     await resetCustomerPassword(parsed.data);
 
-    // Remove any browser session cookies as an additional precaution.
     clearSessionCookies(res);
 
     res.status(200).json({

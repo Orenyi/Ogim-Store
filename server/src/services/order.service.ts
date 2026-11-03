@@ -601,3 +601,44 @@ export async function expirePendingOrders(): Promise<number> {
 
   return expiredCount;
 }
+
+// ============================================
+// GET ALL ORDERS FOR AN AUTHENTICATED CUSTOMER
+// ============================================
+
+export async function getCustomerOrders(userId: string) {
+  if (!mongoose.isValidObjectId(userId)) {
+    throw new OrderServiceError("Invalid customer ID.", 400);
+  }
+
+  const orders = await OrderModel.find({ userId })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return orders;
+}
+
+// ============================================
+// GET ONE ORDER FOR AN AUTHENTICATED CUSTOMER
+// ============================================
+
+export async function getCustomerOrderById(userId: string, orderId: string) {
+  if (!mongoose.isValidObjectId(userId)) {
+    throw new OrderServiceError("Invalid customer ID.", 400);
+  }
+
+  if (!mongoose.isValidObjectId(orderId)) {
+    throw new OrderServiceError("Invalid order ID.", 400);
+  }
+
+  const order = await OrderModel.findOne({
+    _id: orderId,
+    userId,
+  }).lean();
+
+  if (!order) {
+    throw new OrderServiceError("Order not found.", 404);
+  }
+
+  return order;
+}

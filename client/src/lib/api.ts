@@ -174,11 +174,8 @@ export interface OrderApiRecord {
   currency: "NGN";
   status: OrderStatus;
   paymentStatus: OrderPaymentStatus;
-
-  // Canonical payment identifiers returned by the backend.
   paidPaymentId: string | null;
   paymentReference: string | null;
-
   reservationExpiresAt: string;
   stockRestoredAt: string | null;
   createdAt: string;
@@ -198,6 +195,27 @@ export interface CancelOrderResponse {
   success: boolean;
   message: string;
   data: OrderApiRecord;
+}
+
+// ============================================
+// CUSTOMER ORDER HISTORY RESPONSE TYPES
+// ============================================
+
+export interface CustomerOrdersResponse {
+  success: boolean;
+  message: string;
+  data: {
+    orders: OrderApiRecord[];
+    total: number;
+  };
+}
+
+export interface CustomerOrderResponse {
+  success: boolean;
+  message: string;
+  data: {
+    order: OrderApiRecord;
+  };
 }
 
 // ============================================
@@ -382,6 +400,29 @@ export async function resetPassword(
   });
 }
 
+/**
+ * Delete the authenticated customer's account.
+ *
+ * The backend performs a transactional soft deletion:
+ * - Anonymizes personal account information.
+ * - Disables the customer account.
+ * - Revokes active refresh sessions.
+ * - Invalidates outstanding password-reset tokens.
+ * - Preserves historical orders and payment records.
+ *
+ * Authentication cookies are cleared by the backend.
+ * The frontend also clears its cached CSRF token.
+ */
+export async function deleteCustomerAccount(): Promise<AuthMessageResponse> {
+  const response = await apiRequest<AuthMessageResponse>("/auth/account", {
+    method: "DELETE",
+  });
+
+  clearCsrfToken();
+
+  return response;
+}
+
 // ============================================
 // CUSTOMER CART API
 // ============================================
@@ -461,10 +502,25 @@ export async function mergeGuestCart(
 // ============================================
 
 /**
+ * Fetch all orders belonging to the authenticated customer.
+ */
+export async function getCustomerOrders(): Promise<CustomerOrdersResponse> {
+  return apiRequest<CustomerOrdersResponse>("/orders");
+}
+
+/**
+ * Fetch one order belonging to the authenticated customer.
+ */
+export async function getCustomerOrderById(
+  orderId: string,
+): Promise<CustomerOrderResponse> {
+  return apiRequest<CustomerOrderResponse>(
+    `/orders/${encodeURIComponent(orderId)}`,
+  );
+}
+
+/**
  * Create a pending order from the customer's cart.
- *
- * The backend calculates product prices, subtotal,
- * delivery fee and total. Never send frontend prices.
  */
 export async function createOrder(
   payload: CreateOrderPayload,
@@ -477,10 +533,6 @@ export async function createOrder(
 
 /**
  * Initialize Paystack payment for an existing pending order.
- *
- * The backend retrieves the order and calculates the
- * authoritative payment amount. Never send an amount
- * from the frontend.
  */
 export async function initializeOrderPayment(
   orderId: string,
@@ -495,11 +547,6 @@ export async function initializeOrderPayment(
 
 /**
  * Verify a Paystack payment and retrieve the complete order.
- *
- * The backend independently contacts Paystack and validates
- * the transaction reference, amount and currency.
- *
- * The frontend must never mark an order as paid independently.
  */
 export async function verifyOrderPayment(
   orderId: string,
@@ -516,8 +563,6 @@ export async function verifyOrderPayment(
 
 /**
  * Cancel a pending order.
- *
- * The backend handles cancellation and stock restoration.
  */
 export async function cancelOrder(
   orderId: string,

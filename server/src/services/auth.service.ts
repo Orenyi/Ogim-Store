@@ -216,7 +216,7 @@ export async function loginCustomer(
     input.password,
   );
 
-  if (!passwordMatches || user.status !== "active") {
+  if (!passwordMatches || user.status !== "active" || user.deletedAt) {
     throw new Error("Invalid email or password.");
   }
 
@@ -259,7 +259,7 @@ export async function rotateRefreshToken(
 
   const user = await User.findById(session.userId);
 
-  if (!user || user.status !== "active") {
+  if (!user || user.status !== "active" || user.deletedAt) {
     await RefreshSession.updateOne(
       {
         _id: session._id,
@@ -349,11 +349,113 @@ export async function revokeRefreshToken(refreshToken?: string) {
 export async function getCurrentUser(userId: string) {
   const user = await User.findById(userId);
 
-  if (!user || user.status !== "active") {
+  if (!user || user.status !== "active" || user.deletedAt) {
     throw new Error("Session expired. Please sign in again.");
   }
 
   return toPublicUser(user);
+}
+
+/**
+ * Soft-delete a customer's account.
+ *
+ * This operation:
+ * - Preserves the customer's MongoDB document and _id.
+ * - Anonymizes personal account information.
+ * - Disables the account.
+ * - Revokes all refresh sessions.
+ * - Invalidates outstanding password-reset tokens.
+ * - Preserves orders, payments and transaction records.
+ *
+ * All database changes are committed in one MongoDB transaction.
+ */
+export async function deleteCustomerAccount(userId: string): Promise<void> {
+  if (!Types.ObjectId.isValid(userId)) {
+    throw new Error("Invalid customer account.");
+  }
+
+  const customerId = new Types.ObjectId(userId);
+  const now = new Date();
+
+  // This unique internal address releases the customer's original email.
+  // The .invalid domain is reserved and cannot receive email.
+  const anonymizedEmail = `deleted-${customerId.toString()}@deleted.ogim.invalid`;
+
+  const mongoSession = await mongoose.startSession();
+
+  try {
+    await mongoSession.withTransaction(async () => {
+      // Only an active customer can delete their account.
+      // Admin accounts cannot be deleted through this customer endpoint.
+      const deletedUser = await User.findOneAndUpdate(
+        {
+          _id: customerId,
+          role: "customer",
+          status: "active",
+          deletedAt: null,
+        },
+        {
+          $set: {
+            fullName: "Deleted Customer",
+            email: anonymizedEmail,
+            status: "disabled",
+            deletedAt: now,
+            emailVerifiedAt: null,
+          },
+          $unset: {
+            phoneNumber: "",
+            passwordHash: "",
+            googleSubject: "",
+          },
+        },
+        {
+          new: true,
+          session: mongoSession,
+          runValidators: true,
+        },
+      );
+
+      if (!deletedUser) {
+        throw new Error(
+          "Customer account was not found or is already unavailable.",
+        );
+      }
+
+      // Revoke every refresh session belonging to this customer.
+      await RefreshSession.updateMany(
+        {
+          userId: customerId,
+          revokedAt: null,
+        },
+        {
+          $set: {
+            revokedAt: now,
+          },
+        },
+        {
+          session: mongoSession,
+        },
+      );
+
+      // Invalidate all outstanding password-reset tokens.
+      await PasswordResetToken.updateMany(
+        {
+          userId: customerId,
+          usedAt: null,
+        },
+        {
+          $set: {
+            usedAt: now,
+          },
+        },
+        {
+          session: mongoSession,
+        },
+      );
+    });
+  } finally {
+    await mongoSession.endSession();
+  }
 }
 
 /**
@@ -387,7 +489,10 @@ export async function loginWithGoogle(
   });
 
   if (existingGoogleUser) {
-    if (existingGoogleUser.status !== "active") {
+    if (
+      existingGoogleUser.status !== "active" ||
+      existingGoogleUser.deletedAt
+    ) {
       throw new Error("This account is unavailable.");
     }
 
@@ -397,7 +502,10 @@ export async function loginWithGoogle(
     };
   }
 
-  const existingEmail = await User.exists({ email });
+  const existingEmail = await User.exists({
+    email,
+    status: "active",
+  });
 
   if (existingEmail) {
     throw new Error(
@@ -450,6 +558,7 @@ export async function requestPasswordReset(
   const user = await User.findOne({
     email: input.email,
     status: "active",
+    deletedAt: null,
   }).select("+passwordHash");
 
   // Do not reveal whether the account exists.
@@ -570,6 +679,7 @@ export async function resetCustomerPassword(
       const user = await User.findOne({
         _id: resetToken.userId,
         status: "active",
+        deletedAt: null,
       })
         .select("+passwordHash")
         .session(mongoSession);
@@ -583,6 +693,7 @@ export async function resetCustomerPassword(
         {
           _id: user._id,
           status: "active",
+          deletedAt: null,
         },
         {
           $set: {

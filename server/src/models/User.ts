@@ -48,6 +48,12 @@ const userSchema = new Schema(
       required: true,
     },
 
+    // Records when a customer account was soft-deleted.
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+
     emailVerifiedAt: {
       type: Date,
       default: null,

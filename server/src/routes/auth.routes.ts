@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import {
+  deleteAccount,
   forgotPassword,
   getCsrfToken,
   googleLogin,
@@ -87,6 +88,15 @@ router.post(
 
 // Current authenticated customer
 router.get("/me", requireCustomerAuth, me);
+
+// Delete customer account
+router.delete(
+  "/account",
+  requireTrustedOrigin,
+  requireCsrfToken,
+  requireCustomerAuth,
+  deleteAccount,
+);
 
 // Logout
 router.post("/logout", requireTrustedOrigin, requireCsrfToken, logout);

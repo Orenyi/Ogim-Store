@@ -23,16 +23,15 @@ export default function AccountMobileMenu() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const name = user?.name?.trim() || "Customer";
+  const name = user?.fullName?.trim() || "Customer";
   const email = user?.email || "";
-  const initials =
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase() || "C";
+  const initials = name
+    .split(" ")
+    .filter(Boolean)
+    .map((part: string) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   const handleLogout = () => {
     logout();
