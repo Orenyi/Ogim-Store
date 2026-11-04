@@ -1,5 +1,5 @@
-import staffLoginImage from "../../assets/images/staff_login_img.webp";
-import ogimLogo from "../../assets/images/ogim_logo.webp";
+import staffLoginImage from "../../../assets/images/staff_login_img.webp";
+import ogimLogo from "../../../assets/images/ogim_logo.webp";
 
 export default function AdminLoginVisual() {
   return (
@@ -11,11 +11,11 @@ export default function AdminLoginVisual() {
 
       {/* Brand and image */}
       <div className="relative z-10 flex w-full max-w-[620px] flex-col items-center px-8 py-12 xl:px-12">
-        <img
+        {/* <img
           src={ogimLogo}
           alt="Ogim Store"
           className="mb-8 h-12 w-auto object-contain"
-        />
+        /> */}
 
         <div className="relative w-full max-w-[520px]">
           <img
@@ -23,16 +23,6 @@ export default function AdminLoginVisual() {
             alt="Smartphones available at Ogim Store"
             className="h-auto w-full object-contain"
           />
-        </div>
-
-        <div className="mt-5 max-w-sm text-center">
-          <h2 className="font-heading text-xl font-extrabold tracking-[-0.04em] text-[var(--color-ink)] xl:text-2xl">
-            Everything under control.
-          </h2>
-
-          <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">
-            Manage orders, inventory and deliveries from one secure workspace.
-          </p>
         </div>
       </div>
     </section>

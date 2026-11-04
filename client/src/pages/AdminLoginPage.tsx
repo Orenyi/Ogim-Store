@@ -2,9 +2,9 @@ import { useState } from "react";
 
 import AdminLoginForm, {
   type AdminLoginCredentials,
-} from "../admin/auth/AdminLoginForm";
+} from "../admin/components/auth/AdminLoginForm";
 
-import AdminLoginVisual from "../admin/auth/AdminLoginVisual";
+import AdminLoginVisual from "../admin/components/auth/AdminLoginVisual";
 
 export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false);

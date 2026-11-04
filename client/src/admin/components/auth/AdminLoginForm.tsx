@@ -12,11 +12,11 @@ import {
   FiAlertCircle,
 } from "react-icons/fi";
 
-import ogimLogo from "../../assets/images/ogim_logo.webp";
+import ogimLogo from "../../../assets/images/ogim_logo.webp";
 
-import type { AdminLoginCredentials } from "../types/auth.types";
+import type { AdminLoginCredentials } from "../../types/auth.types";
 
-export type { AdminLoginCredentials } from "../types/auth.types";
+export type { AdminLoginCredentials } from "../../types/auth.types";
 
 type AdminLoginFormProps = {
   onSubmit: (credentials: AdminLoginCredentials) => Promise<void>;
@@ -72,11 +72,11 @@ export default function AdminLoginForm({
       className="w-full max-w-[440px]"
     >
       {/* Mobile logo */}
-      <div className="mb-7 flex justify-center lg:hidden">
+      <div className="mb-7 flex justify-center ">
         <img
           src={ogimLogo}
           alt="Ogim Store"
-          className="h-10 w-auto object-contain"
+          className="h-10 w-auto object-cover lg:h-16"
         />
       </div>
 
