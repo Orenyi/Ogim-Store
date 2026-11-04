@@ -1,6 +1,9 @@
 import { Route, Routes } from "react-router-dom";
 
 import StoreLayout from "./components/layout/StoreLayout";
+import ScrollToTop from "./components/layout/ScrollToTop";
+
+// Store pages
 import Homepage from "./pages/Homepage";
 import ShopPage from "./pages/ShopPage";
 import SearchResultsPage from "./pages/SearchResultsPage";
@@ -12,7 +15,6 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import PasswordResetSuccessPage from "./pages/PasswordResetSuccessPage";
 import CheckoutPage from "./pages/CheckoutPage";
-import ProtectedRoute from "./components/checkout/ProtectedRoute";
 import OrderConfirmationPage from "./pages/OrderConfirmationPage";
 import AccountOverviewPage from "./pages/AccountOverviewPage";
 import AccountOrdersPage from "./pages/AccountOrdersPage";
@@ -25,19 +27,31 @@ import ReturnsPage from "./pages/ReturnsPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import TermsPage from "./pages/TermsPage";
 import NotFoundPage from "./pages/NotFoundPage";
-import ScrollToTop from "./components/layout/ScrollToTop";
+
+// Store protection
+import ProtectedRoute from "./components/checkout/ProtectedRoute";
+
+// Admin layout
+import AdminLayout from "./admin/components/layout/AdminLayout";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
 
 export default function App() {
   return (
     <>
       <ScrollToTop />
+
       <Routes>
+        {/* =====================================
+            CUSTOMER STOREFRONT
+        ===================================== */}
         <Route element={<StoreLayout />}>
           <Route path="/" element={<Homepage />} />
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/search" element={<SearchResultsPage />} />
           <Route path="/products/:slug" element={<ProductDetailsPage />} />
           <Route path="/cart" element={<CartPage />} />
+
+          {/* Customer authentication */}
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -46,6 +60,8 @@ export default function App() {
             path="/password-reset-success"
             element={<PasswordResetSuccessPage />}
           />
+
+          {/* Protected checkout */}
           <Route element={<ProtectedRoute />}>
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route
@@ -53,13 +69,16 @@ export default function App() {
               element={<OrderConfirmationPage />}
             />
           </Route>
-          <Route path="/account" element={<AccountOverviewPage />} />
 
+          {/* Customer account */}
+          <Route path="/account" element={<AccountOverviewPage />} />
           <Route path="/account/orders" element={<AccountOrdersPage />} />
           <Route
             path="/account/orders/:orderId"
             element={<AccountOrderDetailsPage />}
           />
+
+          {/* Information pages */}
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/faq" element={<FAQPage />} />
@@ -69,6 +88,13 @@ export default function App() {
           <Route path="/terms" element={<TermsPage />} />
 
           <Route path="*" element={<NotFoundPage />} />
+        </Route>
+
+        {/* =====================================
+            ADMIN DASHBOARD
+        ===================================== */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboardPage />} />
         </Route>
       </Routes>
     </>
