@@ -1,5 +1,4 @@
 import staffLoginImage from "../../../assets/images/staff_login_img.webp";
-import ogimLogo from "../../../assets/images/ogim_logo.webp";
 
 export default function AdminLoginVisual() {
   return (
@@ -11,12 +10,6 @@ export default function AdminLoginVisual() {
 
       {/* Brand and image */}
       <div className="relative z-10 flex w-full max-w-[620px] flex-col items-center px-8 py-12 xl:px-12">
-        {/* <img
-          src={ogimLogo}
-          alt="Ogim Store"
-          className="mb-8 h-12 w-auto object-contain"
-        /> */}
-
         <div className="relative w-full max-w-[520px]">
           <img
             src={staffLoginImage}

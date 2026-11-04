@@ -42,7 +42,7 @@ export default function AdminDashboardPage() {
     void loadDashboard();
   }, [loadDashboard]);
 
-  const isDemoMode = import.meta.env.VITE_USE_ADMIN_MOCKS === "true";
+  // const isDemoMode = import.meta.env.VITE_USE_ADMIN_MOCKS === "true";
 
   if (loading) {
     return <DashboardSkeleton />;
