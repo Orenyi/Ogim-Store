@@ -34,6 +34,7 @@ import ProtectedRoute from "./components/checkout/ProtectedRoute";
 // Admin layout
 import AdminLayout from "./admin/components/layout/AdminLayout";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
+import AdminLoginPage from "./pages/AdminLoginPage";
 
 export default function App() {
   return (
@@ -96,6 +97,7 @@ export default function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboardPage />} />
         </Route>
+        <Route path="/admin/login" element={<AdminLoginPage />} />
       </Routes>
     </>
   );
