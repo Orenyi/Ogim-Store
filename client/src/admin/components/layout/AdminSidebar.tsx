@@ -57,7 +57,7 @@ const navigationGroups = [
   {
     title: "Settings",
     items: [
-      { label: "Users & Roles", path: "/admin/staff", icon: FiUsers },
+      { label: "Users & Roles", path: "/admin/users", icon: FiUsers },
       { label: "Store Settings", path: "/admin/settings", icon: FiSettings },
     ],
   },

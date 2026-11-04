@@ -1,5 +1,5 @@
 import { FiSearch, FiDownload, FiX } from "react-icons/fi";
-import type { TrackingQuery, TrackingStatus } from "../../types/tracking.types";
+import type { TrackingQuery } from "../../types/tracking.types";
 
 type Props = {
   query: TrackingQuery;

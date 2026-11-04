@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FiX, FiUser, FiMapPin, FiTruck } from "react-icons/fi";
+import { FiX, FiUser, FiMapPin } from "react-icons/fi";
 import type { TrackingOrder } from "../../types/tracking.types";
 import TrackingStatusBadge from "./TrackingStatusBadge";
 import TrackingTimeline from "./TrackingTimeline";

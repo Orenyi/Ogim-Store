@@ -41,6 +41,7 @@ import InventoryPage from "./pages/InventoryPage";
 import DispatchPage from "./pages/DispatchPage";
 import DeliverySettingsPage from "./pages/DeliverySettingsPage";
 import TrackingManagementPage from "./pages/TrackingManagementPage";
+import StaffPermissionsPage from "./pages/StaffPermissionsPage";
 
 export default function App() {
   return (
@@ -111,6 +112,7 @@ export default function App() {
             element={<DeliverySettingsPage />}
           />
           <Route path="/admin/tracking" element={<TrackingManagementPage />} />
+          <Route path="/admin/users" element={<StaffPermissionsPage />} />
         </Route>
 
         <Route path="/admin/login" element={<AdminLoginPage />} />

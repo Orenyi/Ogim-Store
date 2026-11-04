@@ -27,7 +27,7 @@ const menuItems = [
   { label: "Order Tracking", path: "/admin/tracking", icon: FiMapPin },
   { label: "Revenue", path: "/admin/reports", icon: FiTrendingUp },
   { label: "Sales", path: "/admin/reports?tab=sales", icon: FiBarChart2 },
-  { label: "Users & Roles", path: "/admin/staff", icon: FiUsers },
+  { label: "Users & Roles", path: "/admin/users", icon: FiUsers },
   { label: "Store Settings", path: "/admin/settings", icon: FiSettings },
 ];
 
