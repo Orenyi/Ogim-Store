@@ -37,6 +37,7 @@ import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminOrdersPage from "./pages/AdminOrdersPage";
 import AdminOrderDetailsPage from "./pages/AdminOrderDetailsPage";
+import InventoryPage from "./pages/InventoryPage";
 
 export default function App() {
   return (
@@ -100,6 +101,7 @@ export default function App() {
           <Route index element={<AdminDashboardPage />} />
           <Route path="orders" element={<AdminOrdersPage />} />
           <Route path="orders/:orderId" element={<AdminOrderDetailsPage />} />
+          <Route path="inventory" element={<InventoryPage />} />
         </Route>
 
         <Route path="/admin/login" element={<AdminLoginPage />} />

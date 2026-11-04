@@ -1,4 +1,4 @@
-import { FiBox, FiCheckCircle, FiCircle, FiClock } from "react-icons/fi";
+import { FiBox, FiCheckCircle, FiCircle } from "react-icons/fi";
 
 import type { AdminOrder, OrderTimelineEvent } from "../../types/orders.types";
 
