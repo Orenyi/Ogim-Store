@@ -35,6 +35,8 @@ import ProtectedRoute from "./components/checkout/ProtectedRoute";
 import AdminLayout from "./admin/components/layout/AdminLayout";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
+import AdminOrdersPage from "./pages/AdminOrdersPage";
+import AdminOrderDetailsPage from "./pages/AdminOrderDetailsPage";
 
 export default function App() {
   return (
@@ -96,7 +98,10 @@ export default function App() {
         ===================================== */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboardPage />} />
+          <Route path="orders" element={<AdminOrdersPage />} />
+          <Route path="orders/:orderId" element={<AdminOrderDetailsPage />} />
         </Route>
+
         <Route path="/admin/login" element={<AdminLoginPage />} />
       </Routes>
     </>

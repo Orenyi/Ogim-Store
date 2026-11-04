@@ -8,7 +8,6 @@ import {
   FiTruck,
   FiUsers,
   FiMapPin,
-  FiActivity,
   FiBarChart2,
   FiTrendingUp,
   FiSettings,
