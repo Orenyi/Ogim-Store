@@ -39,6 +39,7 @@ import AdminOrdersPage from "./pages/AdminOrdersPage";
 import AdminOrderDetailsPage from "./pages/AdminOrderDetailsPage";
 import InventoryPage from "./pages/InventoryPage";
 import DispatchPage from "./pages/DispatchPage";
+import DeliverySettingsPage from "./pages/DeliverySettingsPage";
 
 export default function App() {
   return (
@@ -104,6 +105,10 @@ export default function App() {
           <Route path="orders/:orderId" element={<AdminOrderDetailsPage />} />
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="dispatch" element={<DispatchPage />} />
+          <Route
+            path="/admin/delivery-fees"
+            element={<DeliverySettingsPage />}
+          />
         </Route>
 
         <Route path="/admin/login" element={<AdminLoginPage />} />

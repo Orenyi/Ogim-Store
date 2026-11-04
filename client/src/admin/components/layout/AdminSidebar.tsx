@@ -43,7 +43,7 @@ const navigationGroups = [
     title: "Fulfilment",
     items: [
       { label: "Dispatch", path: "/admin/dispatch", icon: FiBox },
-      { label: "Delivery Fees", path: "/admin/delivery", icon: FiTruck },
+      { label: "Delivery Fees", path: "/admin/delivery-fees", icon: FiTruck },
       { label: "Tracking", path: "/admin/tracking", icon: FiMapPin },
     ],
   },

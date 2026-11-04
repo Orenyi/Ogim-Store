@@ -23,7 +23,7 @@ const menuItems = [
   { label: "Inventory", path: "/admin/inventory", icon: FiPackage },
   { label: "Customers", path: "/admin/customers", icon: FiUsers },
   { label: "Dispatch", path: "/admin/dispatch", icon: FiBox },
-  { label: "Delivery Fees", path: "/admin/delivery", icon: FiTruck },
+  { label: "Delivery Fees", path: "/admin/delivery-fees", icon: FiTruck },
   { label: "Order Tracking", path: "/admin/tracking", icon: FiMapPin },
   { label: "Revenue", path: "/admin/reports", icon: FiTrendingUp },
   { label: "Sales", path: "/admin/reports?tab=sales", icon: FiBarChart2 },
