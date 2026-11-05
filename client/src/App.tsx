@@ -42,6 +42,7 @@ import DispatchPage from "./pages/DispatchPage";
 import DeliverySettingsPage from "./pages/DeliverySettingsPage";
 import TrackingManagementPage from "./pages/TrackingManagementPage";
 import StaffPermissionsPage from "./pages/StaffPermissionsPage";
+import RevenueReportsPage from "./pages/RevenueReportsPage";
 
 export default function App() {
   return (
@@ -113,6 +114,7 @@ export default function App() {
           />
           <Route path="/admin/tracking" element={<TrackingManagementPage />} />
           <Route path="/admin/users" element={<StaffPermissionsPage />} />
+          <Route path="/admin/revenue" element={<RevenueReportsPage />} />
         </Route>
 
         <Route path="/admin/login" element={<AdminLoginPage />} />

@@ -50,7 +50,7 @@ const navigationGroups = [
   {
     title: "Reports",
     items: [
-      { label: "Revenue", path: "/admin/reports", icon: FiTrendingUp },
+      { label: "Revenue", path: "/admin/revenue", icon: FiTrendingUp },
       { label: "Sales", path: "/admin/reports?tab=sales", icon: FiBarChart2 },
     ],
   },
