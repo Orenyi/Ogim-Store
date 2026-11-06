@@ -27,8 +27,6 @@ const productImageSchema = new Schema(
 
 /**
  * Optional technical details for different phone models.
- * Keeping these optional allows Apple, Samsung, Google, and other
- * manufacturers to have different specifications.
  */
 const productSpecificationsSchema = new Schema(
   {
@@ -96,6 +94,23 @@ const productSchema = new Schema(
         "Slug must contain lowercase letters, numbers, and single hyphens",
       ],
       maxlength: [180, "Product slug cannot exceed 180 characters"],
+    },
+
+    /**
+     * Inventory SKU.
+     * Each product must have a unique SKU.
+     */
+    sku: {
+      type: String,
+      required: [true, "Product SKU is required"],
+      unique: true,
+      uppercase: true,
+      trim: true,
+      maxlength: [80, "SKU cannot exceed 80 characters"],
+      match: [
+        /^[A-Z0-9]+(?:[-_][A-Z0-9]+)*$/,
+        "SKU can contain uppercase letters, numbers, hyphens and underscores",
+      ],
     },
 
     brand: {
@@ -187,7 +202,7 @@ const productSchema = new Schema(
         values: ["draft", "published", "archived"],
         message: "Status must be draft, published, or archived",
       },
-      default: "draft",
+      default: "published",
       required: true,
     },
 
@@ -195,6 +210,7 @@ const productSchema = new Schema(
       type: Boolean,
       default: false,
     },
+
     rating: {
       type: Number,
       min: 0,
@@ -221,8 +237,13 @@ const productSchema = new Schema(
   },
 );
 
-// Explicit indexes for common catalogue queries.
-// The slug's unique option already creates a unique index.
+// ============================================
+// INDEXES
+// ============================================
+
+// The slug's unique option creates its unique index.
+productSchema.index({ sku: 1 }, { unique: true });
+
 productSchema.index({ status: 1, createdAt: -1 });
 productSchema.index({ status: 1, brand: 1 });
 productSchema.index({ status: 1, condition: 1 });

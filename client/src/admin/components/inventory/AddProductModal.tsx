@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -15,9 +15,11 @@ import type {
   CreateInventoryProductInput,
   ProductBrand,
   ProductCondition,
+  ProductImage,
   ProductTechnicalSpecifications,
 } from "../../types/inventory.types";
 
+import { deleteAdminProductImage } from "../../services/adminInventory.service";
 import ProductImageUpload from "./ProductImageUpload";
 
 type Props = {
@@ -109,6 +111,7 @@ function Field({
         {label}
         {required && <span className="ml-1 text-[var(--color-error)]">*</span>}
       </span>
+
       {children}
     </label>
   );
@@ -134,10 +137,12 @@ function SectionHeading({
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
         <Icon size={17} />
       </span>
+
       <div>
         <h3 className="text-sm font-extrabold text-[var(--color-ink)]">
           {title}
         </h3>
+
         <p className="mt-0.5 text-xs text-[var(--color-muted)]">
           {description}
         </p>
@@ -153,17 +158,159 @@ export default function AddProductModal({
   onSubmit,
 }: Props) {
   const [form, setForm] = useState<FormState>(initialForm);
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<ProductImage[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [cleaningImages, setCleaningImages] = useState(false);
   const [error, setError] = useState("");
 
+  // Keep the latest uploaded images available to cleanup logic.
+  const imagesRef = useRef<ProductImage[]>([]);
+
+  // Keep callbacks and state transitions safe across async operations.
+  const mountedRef = useRef(false);
+  const closingRef = useRef(false);
+  const productCreatedRef = useRef(false);
+  const cleanupPromiseRef = useRef<Promise<void> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const updateImages = useCallback((nextImages: ProductImage[]) => {
+    imagesRef.current = nextImages;
+    setImages(nextImages);
+  }, []);
+
+  const resetForm = useCallback(() => {
+    setForm(initialForm);
+    imagesRef.current = [];
+    setImages([]);
+    setUploading(false);
+    setError("");
+    productCreatedRef.current = false;
+    closingRef.current = false;
+    cleanupPromiseRef.current = null;
+  }, []);
+
+  /**
+   * Delete only temporary Cloudinary images that are not attached
+   * to a successfully created product.
+   */
+  const cleanupUploadedImages = useCallback(async () => {
+    if (productCreatedRef.current || imagesRef.current.length === 0) {
+      return;
+    }
+
+    // Reuse an existing cleanup request instead of sending duplicates.
+    if (cleanupPromiseRef.current) {
+      return cleanupPromiseRef.current;
+    }
+
+    const imagesToDelete = [...imagesRef.current].filter((image) =>
+      Boolean(image.publicId),
+    );
+
+    // Clear the current list before sending requests.
+    imagesRef.current = [];
+    setImages([]);
+
+    const cleanupPromise = (async () => {
+      if (mountedRef.current) {
+        setCleaningImages(true);
+      }
+
+      try {
+        const results = await Promise.allSettled(
+          imagesToDelete.map((image) =>
+            deleteAdminProductImage(image.publicId),
+          ),
+        );
+
+        const failedCount = results.filter(
+          (result) => result.status === "rejected",
+        ).length;
+
+        if (failedCount > 0) {
+          console.warn(
+            `${failedCount} temporary product image(s) could not be deleted from Cloudinary.`,
+          );
+
+          if (mountedRef.current) {
+            setError(
+              "Some temporary images could not be deleted. Please try closing the form again.",
+            );
+          }
+        }
+      } finally {
+        cleanupPromiseRef.current = null;
+
+        if (mountedRef.current) {
+          setCleaningImages(false);
+        }
+      }
+    })();
+
+    cleanupPromiseRef.current = cleanupPromise;
+
+    return cleanupPromise;
+  }, []);
+
+  /**
+   * One close handler for Cancel, close icon, backdrop and Escape.
+   */
+  const handleClose = useCallback(async () => {
+    if (
+      saving ||
+      uploading ||
+      cleaningImages ||
+      closingRef.current ||
+      productCreatedRef.current
+    ) {
+      return;
+    }
+
+    closingRef.current = true;
+    setError("");
+
+    try {
+      await cleanupUploadedImages();
+
+      // If cleanup failed, keep the modal open so the user can retry.
+      if (cleanupPromiseRef.current) {
+        closingRef.current = false;
+        return;
+      }
+
+      onClose();
+    } catch {
+      closingRef.current = false;
+
+      if (mountedRef.current) {
+        setError("Unable to clean up temporary images. Please try again.");
+      }
+    }
+  }, [saving, uploading, cleaningImages, cleanupUploadedImages, onClose]);
+
+  // Reset state when the modal opens.
+  useEffect(() => {
+    if (!open) return;
+
+    resetForm();
+  }, [open, resetForm]);
+
+  // Escape key support.
   useEffect(() => {
     if (!open) return;
 
     function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !saving && !uploading) {
-        onClose();
-      }
+      if (event.key !== "Escape") return;
+
+      event.preventDefault();
+      void handleClose();
     }
 
     document.addEventListener("keydown", handleEscape);
@@ -171,16 +318,7 @@ export default function AddProductModal({
     return () => {
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [open, saving, uploading, onClose]);
-
-  useEffect(() => {
-    if (!open) {
-      setForm(initialForm);
-      setImages([]);
-      setError("");
-      setUploading(false);
-    }
-  }, [open]);
+  }, [open, handleClose]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({
@@ -191,31 +329,42 @@ export default function AddProductModal({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (saving || uploading || cleaningImages || closingRef.current) return;
+
     setError("");
 
+    const name = form.name.trim();
+    const model = form.model.trim();
+    const description = form.description.trim();
+    const sku = form.sku.trim().toUpperCase();
+    const storage = form.storage.trim();
+
     const price = Number(form.price);
-    const compareAtPrice = form.compareAtPrice
+
+    const compareAtPrice = form.compareAtPrice.trim()
       ? Number(form.compareAtPrice)
       : undefined;
+
     const stockQuantity = Number(form.stockQuantity);
 
-    if (!form.name.trim() || !form.sku.trim() || !form.storage.trim()) {
-      setError("Product name, SKU and storage are required.");
+    if (!name || !model || !description || !sku || !storage) {
+      setError(
+        "Product name, model, description, SKU and storage are required.",
+      );
       return;
     }
 
     if (!Number.isFinite(price) || price <= 0) {
-      setError("Enter a valid product price.");
+      setError("Enter a valid product selling price.");
       return;
     }
 
     if (
       compareAtPrice !== undefined &&
-      (!Number.isFinite(compareAtPrice) || compareAtPrice < price)
+      (!Number.isFinite(compareAtPrice) || compareAtPrice <= price)
     ) {
-      setError(
-        "Compare-at price must be greater than or equal to the selling price.",
-      );
+      setError("Compare-at price must be greater than the selling price.");
       return;
     }
 
@@ -224,8 +373,20 @@ export default function AddProductModal({
       return;
     }
 
+    if (images.length === 0) {
+      setError("Please upload at least one product image.");
+      return;
+    }
+
+    if (images.some((image) => !image.url || !image.publicId)) {
+      setError(
+        "Every product image must have a valid Cloudinary URL and public ID.",
+      );
+      return;
+    }
+
     const specifications: ProductTechnicalSpecifications = {
-      storage: form.storage.trim(),
+      storage,
       ram: form.ram.trim() || undefined,
       color: form.colour.trim() || undefined,
       display: form.display.trim() || undefined,
@@ -241,19 +402,19 @@ export default function AddProductModal({
     };
 
     const input: CreateInventoryProductInput = {
-      name: form.name.trim(),
-      model: form.model.trim() || undefined,
-      description: form.description.trim() || undefined,
+      name,
+      model,
+      description,
       brand: form.brand,
       condition: form.condition,
       price,
       compareAtPrice,
-      storage: form.storage.trim(),
+      storage,
       colour: form.colour.trim(),
       stockQuantity,
-      sku: form.sku.trim().toUpperCase(),
-      image: images[0] || "",
-      images,
+      sku,
+      image: images[0].url,
+      images: [...images],
       specifications,
       isFeatured: form.isFeatured,
       isNewArrival: form.isNewArrival,
@@ -261,12 +422,22 @@ export default function AddProductModal({
 
     try {
       await onSubmit(input);
+
+      // The backend has successfully created the product.
+      // Its Cloudinary images must now be preserved.
+      productCreatedRef.current = true;
+      imagesRef.current = [];
+      setImages([]);
     } catch (err) {
+      // Keep uploaded images so the admin can retry product creation.
       setError(
         err instanceof Error ? err.message : "Unable to create product.",
       );
     }
   }
+
+  const closeDisabled =
+    saving || uploading || cleaningImages || closingRef.current;
 
   return (
     <AnimatePresence>
@@ -277,8 +448,8 @@ export default function AddProductModal({
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-[var(--color-ink)]/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !saving && !uploading) {
-              onClose();
+            if (event.target === event.currentTarget) {
+              void handleClose();
             }
           }}
         >
@@ -291,6 +462,7 @@ export default function AddProductModal({
             aria-modal="true"
             aria-labelledby="add-product-title"
             className="flex max-h-[94dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[24px] bg-[var(--color-paper)] shadow-[var(--shadow-dropdown)] sm:rounded-[var(--radius-card)]"
+            onMouseDown={(event) => event.stopPropagation()}
           >
             {/* Modal header */}
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--color-border)] bg-white px-4 py-4 sm:px-6">
@@ -301,6 +473,7 @@ export default function AddProductModal({
                 >
                   Add New Product
                 </h2>
+
                 <p className="mt-1 text-xs text-[var(--color-muted)]">
                   Add product details and manage its inventory.
                 </p>
@@ -308,10 +481,10 @@ export default function AddProductModal({
 
               <button
                 type="button"
-                onClick={onClose}
-                disabled={saving || uploading}
+                onClick={() => void handleClose()}
+                disabled={closeDisabled}
                 aria-label="Close add product form"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] disabled:opacity-50"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <FiX size={18} />
               </button>
@@ -341,8 +514,9 @@ export default function AddProductModal({
                       />
                     </Field>
 
-                    <Field label="Model">
+                    <Field label="Model" required>
                       <input
+                        required
                         value={form.model}
                         onChange={(e) => update("model", e.target.value)}
                         placeholder="e.g. Galaxy S24 Ultra"
@@ -386,8 +560,9 @@ export default function AddProductModal({
                     </Field>
 
                     <div className="sm:col-span-2">
-                      <Field label="Product description">
+                      <Field label="Product description" required>
                         <textarea
+                          required
                           rows={3}
                           value={form.description}
                           onChange={(e) =>
@@ -542,6 +717,7 @@ export default function AddProductModal({
                           placeholder="S Pen, Wireless charging, Water resistant"
                           className={inputClass}
                         />
+
                         <span className="mt-1 block text-[10px] text-[var(--color-muted)]">
                           Separate features with commas.
                         </span>
@@ -595,7 +771,7 @@ export default function AddProductModal({
 
                   <ProductImageUpload
                     images={images}
-                    onChange={setImages}
+                    onChange={updateImages}
                     onUploadingChange={setUploading}
                   />
                 </section>
@@ -614,10 +790,12 @@ export default function AddProductModal({
                         onChange={(e) => update("isFeatured", e.target.checked)}
                         className="mt-0.5 h-4 w-4 accent-[var(--color-accent)]"
                       />
+
                       <span>
                         <span className="block text-xs font-bold">
                           Featured product
                         </span>
+
                         <span className="mt-1 block text-[10px] text-[var(--color-muted)]">
                           Highlight this product on the storefront.
                         </span>
@@ -633,10 +811,12 @@ export default function AddProductModal({
                         }
                         className="mt-0.5 h-4 w-4 accent-[var(--color-accent)]"
                       />
+
                       <span>
                         <span className="block text-xs font-bold">
                           New arrival
                         </span>
+
                         <span className="mt-1 block text-[10px] text-[var(--color-muted)]">
                           Mark this product as a new arrival.
                         </span>
@@ -644,6 +824,12 @@ export default function AddProductModal({
                     </label>
                   </div>
                 </section>
+
+                {cleaningImages && (
+                  <p className="text-xs text-[var(--color-muted)]">
+                    Cleaning up temporary uploaded images...
+                  </p>
+                )}
 
                 {error && (
                   <div
@@ -659,19 +845,22 @@ export default function AddProductModal({
               <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-[var(--color-border)] bg-white px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
                 <button
                   type="button"
-                  onClick={onClose}
-                  disabled={saving || uploading}
-                  className="h-11 rounded-[var(--radius-control)] border border-[var(--color-border-strong)] px-5 text-xs font-bold text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)] disabled:opacity-50"
+                  onClick={() => void handleClose()}
+                  disabled={closeDisabled}
+                  className="h-11 rounded-[var(--radius-control)] border border-[var(--color-border-strong)] px-5 text-xs font-bold text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Cancel
+                  {cleaningImages ? "Cleaning images..." : "Cancel"}
                 </button>
 
                 <button
                   type="submit"
-                  disabled={saving || uploading}
+                  disabled={
+                    saving || uploading || cleaningImages || closingRef.current
+                  }
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-accent)] px-5 text-xs font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <FiCheck size={16} />
+
                   {uploading
                     ? "Images uploading..."
                     : saving

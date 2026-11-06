@@ -207,7 +207,7 @@ export async function loginCustomer(
     email: input.email,
   }).select("+passwordHash");
 
-  if (!user || !user.passwordHash) {
+  if (!user || !user.passwordHash || user.role !== "customer") {
     throw new Error("Invalid email or password.");
   }
 
@@ -217,6 +217,42 @@ export async function loginCustomer(
   );
 
   if (!passwordMatches || user.status !== "active" || user.deletedAt) {
+    throw new Error("Invalid email or password.");
+  }
+
+  return createSession(user, userAgent, rememberMe);
+}
+
+/**
+ * Login an administrator with email and password.
+ *
+ * Only active admin accounts can authenticate here.
+ */
+export async function loginAdmin(
+  input: LoginInput,
+  userAgent?: string,
+  rememberMe = false,
+) {
+  const user = await User.findOne({
+    email: input.email,
+    role: "admin",
+  }).select("+passwordHash");
+
+  if (
+    !user ||
+    !user.passwordHash ||
+    user.status !== "active" ||
+    user.deletedAt
+  ) {
+    throw new Error("Invalid email or password.");
+  }
+
+  const passwordMatches = await argon2.verify(
+    user.passwordHash,
+    input.password,
+  );
+
+  if (!passwordMatches) {
     throw new Error("Invalid email or password.");
   }
 

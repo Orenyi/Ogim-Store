@@ -17,8 +17,16 @@ export function uploadImageBuffer(
         resource_type: "image",
         allowed_formats: ["jpg", "jpeg", "png", "webp", "avif"],
       },
-      (error, result?: UploadApiResponse) => {
+      (error, result) => {
         if (error) {
+          console.error("CLOUDINARY UPLOAD DIAGNOSTICS:", {
+            name: error.name,
+            message: error.message,
+            http_code: (error as any).http_code,
+            details: (error as any).error,
+            response: (error as any).http_response,
+          });
+
           reject(error);
           return;
         }

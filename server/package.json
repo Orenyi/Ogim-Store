@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed:products": "tsx src/seed/products.seed.ts",
-    "test:email": "tsx src/scripts/test-email.ts"
+    "test:email": "tsx src/scripts/test-email.ts",
+    "admin:create": "tsx src/scripts/create-super-admin.ts"
   },
   "keywords": [],
   "author": "",

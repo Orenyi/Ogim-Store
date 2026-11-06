@@ -29,6 +29,29 @@ export interface ResetPasswordPayload {
 }
 
 // ============================================
+// ADMIN AUTHENTICATION TYPES
+// ============================================
+
+export interface AdminUser {
+  id: string;
+  fullName: string;
+  email: string;
+  role: "admin";
+}
+
+export interface AdminLoginPayload {
+  email: string;
+  password: string;
+  rememberMe?: boolean;
+}
+
+export interface AdminAuthResponse {
+  success: boolean;
+  message?: string;
+  user: AdminUser;
+}
+
+// ============================================
 // CART API TYPES
 // ============================================
 
@@ -321,40 +344,100 @@ export function clearCsrfToken(): void {
   csrfToken = null;
 }
 
-// ============================================
-// BASE API REQUEST
-// ============================================
+/**
+ * Refresh the access token using the HTTP-only refresh cookie.
+ *
+ * The refresh endpoint requires a valid CSRF cookie/header pair.
+ */
+async function refreshAccessSession(): Promise<boolean> {
+  try {
+    const token = await getCsrfToken();
 
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "X-CSRF-Token": token,
+      },
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const result = (await response.json()) as ApiResponse;
+
+    return result.success === true;
+  } catch (error) {
+    console.error("Access session refresh failed:", error);
+    return false;
+  }
+}
+
+/**
+ * Base API request.
+ *
+ * Automatically refreshes an expired access token once and retries
+ * the original request. Refresh is skipped for authentication routes
+ * to prevent login and refresh loops.
+ */
 export async function apiRequest<T>(
   endpoint: string,
   options?: RequestInit,
 ): Promise<T> {
   const method = (options?.method ?? "GET").toUpperCase();
-
   const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
 
-  if (isMutation && !csrfToken) {
-    await getCsrfToken();
+  const excludedRefreshRoutes = [
+    "/auth/csrf",
+    "/auth/login",
+    "/auth/admin/login",
+    "/auth/register",
+    "/auth/google",
+    "/auth/refresh",
+    "/auth/logout",
+  ];
+
+  const canRefresh = !excludedRefreshRoutes.includes(endpoint);
+
+  async function sendRequest(): Promise<Response> {
+    if (isMutation && !csrfToken) {
+      await getCsrfToken();
+    }
+
+    const headers = new Headers(options?.headers);
+
+    headers.set("Accept", "application/json");
+
+    if (options?.body && !(options.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    if (isMutation && csrfToken) {
+      headers.set("X-CSRF-Token", csrfToken);
+    }
+
+    return fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      method,
+      credentials: "include",
+      headers,
+    });
   }
 
-  const headers = new Headers(options?.headers);
+  let response = await sendRequest();
 
-  headers.set("Accept", "application/json");
+  // An expired access token may be recovered using the refresh cookie.
+  if (response.status === 401 && canRefresh) {
+    const refreshed = await refreshAccessSession();
 
-  if (options?.body && !(options.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
+    if (refreshed) {
+      response = await sendRequest();
+    } else {
+      clearCsrfToken();
+    }
   }
-
-  if (isMutation && csrfToken) {
-    headers.set("X-CSRF-Token", csrfToken);
-  }
-
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    method,
-    credentials: "include",
-    headers,
-  });
 
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -379,7 +462,51 @@ export async function apiRequest<T>(
 }
 
 // ============================================
-// AUTHENTICATION
+// ADMIN AUTHENTICATION
+// ============================================
+
+/**
+ * Sign in an administrator.
+ *
+ * The backend sets HTTP-only access and refresh cookies.
+ * No JWT is stored in localStorage.
+ */
+export async function adminLogin(
+  payload: AdminLoginPayload,
+): Promise<AdminAuthResponse> {
+  return apiRequest<AdminAuthResponse>("/auth/admin/login", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Retrieve the currently authenticated admin.
+ *
+ * The backend verifies the HTTP-only access cookie.
+ */
+export async function getAdminSession(): Promise<AdminAuthResponse> {
+  return apiRequest<AdminAuthResponse>("/auth/admin/me");
+}
+
+/**
+ * Sign out the administrator.
+ *
+ * The backend revokes the refresh session and clears
+ * the authentication cookies.
+ */
+export async function adminLogout(): Promise<AuthMessageResponse> {
+  try {
+    return await apiRequest<AuthMessageResponse>("/auth/logout", {
+      method: "POST",
+    });
+  } finally {
+    clearCsrfToken();
+  }
+}
+
+// ============================================
+// CUSTOMER AUTHENTICATION
 // ============================================
 
 export async function forgotPassword(
@@ -403,15 +530,7 @@ export async function resetPassword(
 /**
  * Delete the authenticated customer's account.
  *
- * The backend performs a transactional soft deletion:
- * - Anonymizes personal account information.
- * - Disables the customer account.
- * - Revokes active refresh sessions.
- * - Invalidates outstanding password-reset tokens.
- * - Preserves historical orders and payment records.
- *
- * Authentication cookies are cleared by the backend.
- * The frontend also clears its cached CSRF token.
+ * The backend performs a transactional soft deletion.
  */
 export async function deleteCustomerAccount(): Promise<AuthMessageResponse> {
   const response = await apiRequest<AuthMessageResponse>("/auth/account", {

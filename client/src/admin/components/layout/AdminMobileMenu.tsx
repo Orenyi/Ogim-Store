@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   FiX,
@@ -9,14 +9,18 @@ import {
   FiMapPin,
   FiTrendingUp,
   FiBarChart2,
-  FiSettings,
   FiBox,
   FiLogOut,
+  FiLoader,
 } from "react-icons/fi";
+
+import { adminLogout } from "../../../lib/api";
 import ogimLogo from "../../../assets/images/ogim_logo.webp";
 
 type AdminMobileMenuProps = {
   onClose: () => void;
+  adminName: string;
+  adminRole: string;
 };
 
 const menuItems = [
@@ -28,10 +32,16 @@ const menuItems = [
   { label: "Revenue", path: "/admin/revenue", icon: FiTrendingUp },
   { label: "Sales", path: "/admin/reports?tab=sales", icon: FiBarChart2 },
   { label: "Users & Roles", path: "/admin/users", icon: FiUsers },
-  { label: "Store Settings", path: "/admin/settings", icon: FiSettings },
 ];
 
-export default function AdminMobileMenu({ onClose }: AdminMobileMenuProps) {
+export default function AdminMobileMenu({
+  onClose,
+  adminName,
+  adminRole,
+}: AdminMobileMenuProps) {
+  const navigate = useNavigate();
+  const [loggingOut, setLoggingOut] = useState(false);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -45,6 +55,30 @@ export default function AdminMobileMenu({ onClose }: AdminMobileMenuProps) {
       document.body.style.overflow = "";
     };
   }, [onClose]);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+
+    try {
+      await adminLogout();
+      onClose();
+      navigate("/admin/login", { replace: true });
+    } catch (error) {
+      console.error("Admin logout failed:", error);
+      setLoggingOut(false);
+    }
+  }
+
+  const initials = adminName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <motion.div
@@ -73,6 +107,7 @@ export default function AdminMobileMenu({ onClose }: AdminMobileMenuProps) {
         transition={{ duration: 0.25, ease: [0.2, 0, 0, 1] }}
         className="absolute inset-y-0 left-0 flex w-[min(320px,88vw)] flex-col bg-[var(--color-ink)] text-white shadow-[var(--shadow-dropdown)]"
       >
+        {/* Header */}
         <div className="flex h-[76px] items-center justify-between border-b border-white/10 px-5">
           <Link to="/admin" onClick={onClose}>
             <img
@@ -92,6 +127,7 @@ export default function AdminMobileMenu({ onClose }: AdminMobileMenuProps) {
           </button>
         </div>
 
+        {/* Navigation */}
         <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-5">
           <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/45">
             More options
@@ -120,25 +156,37 @@ export default function AdminMobileMenu({ onClose }: AdminMobileMenuProps) {
           })}
         </nav>
 
+        {/* Admin profile and logout */}
         <div className="border-t border-white/10 p-4">
           <div className="mb-4 flex items-center gap-3 px-2">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-accent)] text-sm font-bold">
-              OS
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-sm font-bold uppercase">
+              {initials || "A"}
             </span>
-            <span>
-              <span className="block text-sm font-semibold">Ogim Admin</span>
-              <span className="block text-xs text-white/50">Administrator</span>
+
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold">
+                {adminName}
+              </span>
+
+              <span className="block truncate text-xs capitalize text-white/50">
+                {adminRole}
+              </span>
             </span>
           </div>
 
           <button
             type="button"
-            disabled
-            title="Sign out will be connected to admin authentication"
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/45"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-white/85 transition-colors hover:bg-red-500/15 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <FiLogOut size={18} />
-            Sign out
+            {loggingOut ? (
+              <FiLoader size={18} className="animate-spin" />
+            ) : (
+              <FiLogOut size={18} />
+            )}
+
+            {loggingOut ? "Signing out..." : "Logout"}
           </button>
         </div>
       </motion.aside>

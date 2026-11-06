@@ -1,26 +1,30 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   FiHome,
   FiShoppingBag,
-  FiBox,
   FiPackage,
+  FiBox,
   FiTruck,
   FiUsers,
   FiMapPin,
   FiBarChart2,
   FiTrendingUp,
-  FiSettings,
   FiChevronLeft,
   FiChevronRight,
-  FiChevronDown,
+  FiLogOut,
+  FiLoader,
 } from "react-icons/fi";
 
+import { adminLogout } from "../../../lib/api";
 import ogimLogo from "../../../assets/images/ogim_logo.webp";
 
 type AdminSidebarProps = {
   collapsed: boolean;
   onToggle: () => void;
+  adminName: string;
+  adminRole: string;
 };
 
 const navigationGroups = [
@@ -34,7 +38,6 @@ const navigationGroups = [
         icon: FiShoppingBag,
         badge: "12",
       },
-      { label: "Products", path: "/admin/products", icon: FiBox },
       { label: "Inventory", path: "/admin/inventory", icon: FiPackage },
       { label: "Customers", path: "/admin/customers", icon: FiUsers },
     ],
@@ -56,17 +59,33 @@ const navigationGroups = [
   },
   {
     title: "Settings",
-    items: [
-      { label: "Users & Roles", path: "/admin/users", icon: FiUsers },
-      { label: "Store Settings", path: "/admin/settings", icon: FiSettings },
-    ],
+    items: [{ label: "Users & Roles", path: "/admin/users", icon: FiUsers }],
   },
 ];
 
 export default function AdminSidebar({
   collapsed,
   onToggle,
+  adminName,
+  adminRole,
 }: AdminSidebarProps) {
+  const navigate = useNavigate();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+
+    try {
+      await adminLogout();
+      navigate("/admin/login", { replace: true });
+    } catch (error) {
+      console.error("Admin logout failed:", error);
+      setLoggingOut(false);
+    }
+  }
+
   return (
     <motion.aside
       animate={{ width: collapsed ? 88 : 252 }}
@@ -158,30 +177,55 @@ export default function AdminSidebar({
         ))}
       </nav>
 
-      {/* Admin profile */}
+      {/* Admin profile and logout */}
       <div className="shrink-0 border-t border-white/15 p-3">
-        <button
-          type="button"
-          className={`flex w-full items-center rounded-xl p-2 text-left transition-colors hover:bg-white/10 ${
+        <div
+          className={`flex items-center rounded-xl p-2 ${
             collapsed ? "justify-center" : "gap-3"
           }`}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-sm font-bold text-white">
-            OS
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-sm font-bold uppercase text-white">
+            {adminName
+              .trim()
+              .split(/\s+/)
+              .filter(Boolean)
+              .map((part) => part[0])
+              .join("")
+              .slice(0, 2)}
           </span>
 
           {!collapsed && (
-            <>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold">
-                  Ogim Admin
-                </span>
-                <span className="block text-xs text-white/55">
-                  Administrator
-                </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">
+                {adminName}
               </span>
-              <FiChevronDown size={17} className="shrink-0 text-white/70" />
-            </>
+
+              <span className="block truncate text-xs capitalize text-white/55">
+                {adminRole}
+              </span>
+            </span>
+          )}
+        </div>
+
+        {/* Keep your existing logout button here */}
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={loggingOut}
+          title={collapsed ? "Logout" : undefined}
+          className={`mt-2 flex min-h-[42px] w-full items-center rounded-[var(--radius-control)] text-sm font-medium text-white/85 transition-colors hover:bg-red-500/15 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-60 ${
+            collapsed ? "justify-center px-2" : "gap-3 px-3"
+          }`}
+        >
+          {loggingOut ? (
+            <FiLoader className="shrink-0 animate-spin" size={19} />
+          ) : (
+            <FiLogOut className="shrink-0" size={19} />
+          )}
+
+          {!collapsed && (
+            <span>{loggingOut ? "Signing out..." : "Logout"}</span>
           )}
         </button>
       </div>

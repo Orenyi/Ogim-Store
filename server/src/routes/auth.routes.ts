@@ -1,6 +1,8 @@
 import { Router } from "express";
 
 import {
+  adminLogin,
+  adminMe,
   deleteAccount,
   forgotPassword,
   getCsrfToken,
@@ -27,10 +29,22 @@ import {
 } from "../middleware/csrf.middleware.js";
 
 import { requireCustomerAuth } from "../middleware/customer-auth.middleware.js";
+import { requireAdmin } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
 router.get("/csrf", getCsrfToken);
+
+// Admin authentication
+router.post(
+  "/admin/login",
+  requireTrustedOrigin,
+  requireCsrfToken,
+  loginRateLimit,
+  adminLogin,
+);
+
+router.get("/admin/me", requireAdmin, adminMe);
 
 // Registration
 router.post(

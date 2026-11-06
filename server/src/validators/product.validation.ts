@@ -19,39 +19,64 @@ const productSpecificationsSchema = z.object({
   additionalFeatures: z.array(z.string().trim()).optional(),
 });
 
-export const createProductSchema = z
-  .object({
-    name: z.string().trim().min(2).max(120),
-    slug: z
-      .string()
-      .trim()
-      .min(2)
-      .max(140)
-      .regex(
-        /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-        "Slug must contain lowercase letters, numbers and hyphens only",
-      ),
-    brand: z.string().trim().min(1).max(60),
-    model: z.string().trim().min(1).max(100),
-    description: z.string().trim().min(10).max(5000),
+const productSkuSchema = z
+  .string()
+  .trim()
+  .min(1, "Product SKU is required")
+  .max(80, "SKU cannot exceed 80 characters")
+  .regex(
+    /^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$/,
+    "SKU can contain letters, numbers, hyphens and underscores",
+  )
+  .transform((value) => value.toUpperCase());
 
-    specifications: productSpecificationsSchema,
+const productFieldsSchema = z.object({
+  name: z.string().trim().min(2).max(120),
 
-    price: z.number().finite().min(0),
-    compareAtPrice: z.number().finite().positive().optional(),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(140)
+    .regex(
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      "Slug must contain lowercase letters, numbers and hyphens only",
+    ),
 
-    images: z.array(productImageSchema).min(1).max(10),
+  sku: productSkuSchema,
 
-    stockQuantity: z.number().int().min(0),
+  brand: z.string().trim().min(1).max(60),
 
-    condition: z.enum(["brand-new", "uk-used", "refurbished"]),
-    status: z.enum(["draft", "published", "archived"]).optional(),
+  model: z.string().trim().min(1).max(100),
 
-    isFeatured: z.boolean().optional(),
-    isNewArrival: z.boolean().optional(),
+  description: z.string().trim().min(10).max(5000),
 
-    rating: z.number().min(0).max(5).optional(),
-    reviewCount: z.number().int().min(0).optional(),
+  specifications: productSpecificationsSchema,
+
+  price: z.number().finite().min(0),
+
+  compareAtPrice: z.number().finite().positive().optional(),
+
+  images: z.array(productImageSchema).min(1).max(10),
+
+  stockQuantity: z.number().int().min(0),
+
+  condition: z.enum(["brand-new", "uk-used", "refurbished"]),
+
+  status: z.enum(["draft", "published", "archived"]).optional(),
+
+  isFeatured: z.boolean().optional(),
+
+  isNewArrival: z.boolean().optional(),
+
+  rating: z.number().min(0).max(5).optional(),
+
+  reviewCount: z.number().int().min(0).optional(),
+});
+
+export const createProductSchema = productFieldsSchema
+  .extend({
+    status: z.enum(["draft", "published", "archived"]).default("published"),
   })
   .strict()
   .superRefine((product, ctx) => {
@@ -66,33 +91,6 @@ export const createProductSchema = z
       });
     }
   });
-
-const productFieldsSchema = z.object({
-  name: z.string().trim().min(2).max(120),
-  slug: z
-    .string()
-    .trim()
-    .min(2)
-    .max(140)
-    .regex(
-      /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-      "Slug must contain lowercase letters, numbers and hyphens only",
-    ),
-  brand: z.string().trim().min(1).max(60),
-  model: z.string().trim().min(1).max(100),
-  description: z.string().trim().min(10).max(5000),
-  specifications: productSpecificationsSchema,
-  price: z.number().finite().min(0),
-  compareAtPrice: z.number().finite().positive().optional(),
-  images: z.array(productImageSchema).min(1).max(10),
-  stockQuantity: z.number().int().min(0),
-  condition: z.enum(["brand-new", "uk-used", "refurbished"]),
-  status: z.enum(["draft", "published", "archived"]).optional(),
-  isFeatured: z.boolean().optional(),
-  isNewArrival: z.boolean().optional(),
-  rating: z.number().min(0).max(5).optional(),
-  reviewCount: z.number().int().min(0).optional(),
-});
 
 export const updateProductSchema = productFieldsSchema
   .partial()

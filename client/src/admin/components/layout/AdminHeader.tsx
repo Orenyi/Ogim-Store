@@ -51,7 +51,7 @@ export default function AdminHeader({
         {/* Desktop greeting */}
         <div className="hidden min-w-0 lg:block">
           <h1 className="font-heading text-[25px] font-extrabold tracking-[-0.045em] text-[var(--color-ink)] xl:text-[28px]">
-            {greeting}, {adminName} <span aria-hidden="true">👋</span>
+            {greeting}, {adminName}
           </h1>
 
           <p className="mt-1 text-sm text-[var(--color-muted)]">

@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import {
   getCurrentUser,
   loginCustomer,
+  loginAdmin,
   loginWithGoogle,
   registerCustomer,
   revokeRefreshToken,
@@ -14,6 +15,7 @@ import {
 } from "../services/auth.service.js";
 
 import type { AuthenticatedRequest } from "../middleware/customer-auth.middleware.js";
+import type { AdminAuthenticatedRequest } from "../middleware/auth.middleware.js";
 
 import {
   forgotPasswordSchema,
@@ -184,6 +186,86 @@ export async function login(req: Request, res: Response): Promise<void> {
     res.status(401).json({
       success: false,
       message: "Invalid email or password.",
+    });
+  }
+}
+
+/**
+ * Admin login.
+ * Only active accounts with the admin role can sign in.
+ */
+export async function adminLogin(req: Request, res: Response): Promise<void> {
+  const parsed = loginSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    res.status(400).json({
+      success: false,
+      message: "Enter a valid email address and password.",
+    });
+    return;
+  }
+
+  try {
+    const session = await loginAdmin(
+      parsed.data,
+      userAgent(req),
+      parsed.data.rememberMe,
+    );
+
+    setSessionCookies(
+      res,
+      session.accessToken,
+      session.refreshToken,
+      session.rememberMe,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Admin signed in successfully.",
+      user: session.user,
+    });
+  } catch {
+    res.status(401).json({
+      success: false,
+      message: "Invalid admin email or password.",
+    });
+  }
+}
+
+/**
+ * Verify the currently authenticated admin session.
+ */
+export async function adminMe(
+  req: AdminAuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.authAdmin) {
+    res.status(401).json({
+      success: false,
+      message: "Administrator authentication required.",
+    });
+    return;
+  }
+
+  try {
+    const user = await getCurrentUser(req.authAdmin.userId);
+
+    if (user.role !== "admin") {
+      res.status(403).json({
+        success: false,
+        message: "Administrator access required.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch {
+    res.status(401).json({
+      success: false,
+      message: "Please sign in again.",
     });
   }
 }

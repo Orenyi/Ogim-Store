@@ -101,22 +101,19 @@ export default function App() {
         </Route>
 
         {/* =====================================
-            ADMIN DASHBOARD
-        ===================================== */}
+    ADMIN DASHBOARD
+===================================== */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboardPage />} />
           <Route path="orders" element={<AdminOrdersPage />} />
           <Route path="orders/:orderId" element={<AdminOrderDetailsPage />} />
-          <Route path="/admin/inventory" element={<InventoryPage />} />
-          <Route path="/admin/dispatch" element={<DispatchPage />} />
-          <Route
-            path="/admin/delivery-fees"
-            element={<DeliverySettingsPage />}
-          />
-          <Route path="/admin/tracking" element={<TrackingManagementPage />} />
-          <Route path="/admin/users" element={<StaffPermissionsPage />} />
-          <Route path="/admin/revenue" element={<RevenueReportsPage />} />
-          <Route path="/admin/customers" element={<CustomersPage />} />
+          <Route path="inventory" element={<InventoryPage />} />
+          <Route path="dispatch" element={<DispatchPage />} />
+          <Route path="delivery-fees" element={<DeliverySettingsPage />} />
+          <Route path="tracking" element={<TrackingManagementPage />} />
+          <Route path="users" element={<StaffPermissionsPage />} />
+          <Route path="revenue" element={<RevenueReportsPage />} />
+          <Route path="customers" element={<CustomersPage />} />
         </Route>
 
         <Route path="/admin/login" element={<AdminLoginPage />} />

@@ -9,6 +9,17 @@ export type ProductBrand =
   | "Infinix"
   | "Other";
 
+/**
+ * Cloudinary image metadata.
+ * The URL is used to display the image.
+ * The publicId is used to manage or delete it in Cloudinary.
+ */
+export interface ProductImage {
+  url: string;
+  publicId: string;
+  alt: string;
+}
+
 export interface ProductTechnicalSpecifications {
   storage?: string;
   ram?: string;
@@ -36,8 +47,15 @@ export interface Product {
 
   storage: string;
   colour: string;
+
+  /** Primary image URL used by storefront components. */
   image: string;
+
+  /** Image URLs used by existing storefront components. */
   images?: string[];
+
+  /** Complete image metadata returned by the backend. */
+  imageDetails?: ProductImage[];
 
   specifications?: ProductTechnicalSpecifications;
 
@@ -87,23 +105,47 @@ export interface InventoryResponse {
   };
 }
 
+/**
+ * Payload used when creating a product.
+ *
+ * Images must already have been uploaded to Cloudinary.
+ * Their URLs and public IDs are saved with the product.
+ */
 export interface CreateInventoryProductInput {
   name: string;
-  model?: string;
-  description?: string;
+  model: string;
+  description: string;
   brand: ProductBrand;
   condition: ProductCondition;
+
   price: number;
   compareAtPrice?: number;
+
   storage: string;
   colour: string;
+
   stockQuantity: number;
   sku: string;
+
+  /** Primary product image URL. */
   image: string;
-  images: string[];
+
+  /** Complete Cloudinary image metadata. */
+  images: ProductImage[];
+
   specifications: ProductTechnicalSpecifications;
+
   isFeatured: boolean;
   isNewArrival: boolean;
+}
+
+/**
+ * Response returned by the pre-product Cloudinary upload endpoint.
+ */
+export interface ProductImageUploadResponse {
+  success: boolean;
+  message: string;
+  data: ProductImage[];
 }
 
 export interface UpdateInventoryStockInput {

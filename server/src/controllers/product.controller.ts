@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
+
 import ProductModel from "../models/product.model.js";
 import cloudinary from "../config/cloudinary.js";
 import { uploadImageBuffer } from "../services/cloudinary.service.js";
@@ -7,16 +8,40 @@ import { uploadImageBuffer } from "../services/cloudinary.service.js";
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 12;
 const MAX_LIMIT = 100;
+const LOW_STOCK_THRESHOLD = 10;
+const PRODUCT_IMAGE_FOLDER = "ogim-store/products";
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "An unexpected error occurred";
+// ============================================
+// HELPERS
+// ============================================
+
+function getInventoryStatus(quantity: number): string {
+  if (quantity <= 0) return "out_of_stock";
+  if (quantity <= LOW_STOCK_THRESHOLD) return "low_stock";
+  return "in_stock";
 }
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function removeCloudinaryImages(publicIds: string[]): Promise<void> {
+  await Promise.allSettled(
+    publicIds.map((publicId) =>
+      cloudinary.uploader.destroy(publicId, {
+        resource_type: "image",
+      }),
+    ),
+  );
+}
+
+// ============================================
+// PUBLIC STOREFRONT
+// ============================================
 
 /**
  * GET /api/v1/products
- * Return published products with optional filtering and pagination.
+ * Return published products with filtering and pagination.
  */
 export async function getProducts(req: Request, res: Response): Promise<void> {
   try {
@@ -50,13 +75,12 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
     }
 
     if (typeof req.query.search === "string" && req.query.search.trim()) {
-      const search = req.query.search.trim().slice(0, 100);
-      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const search = escapeRegex(req.query.search.trim().slice(0, 100));
 
       filter.$or = [
-        { name: { $regex: escapedSearch, $options: "i" } },
-        { brand: { $regex: escapedSearch, $options: "i" } },
-        { model: { $regex: escapedSearch, $options: "i" } },
+        { name: { $regex: search, $options: "i" } },
+        { brand: { $regex: search, $options: "i" } },
+        { model: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -131,7 +155,7 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
         hasPreviousPage: page > 1,
       },
     });
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("getProducts error:", error);
 
     res.status(500).json({
@@ -167,7 +191,7 @@ export async function getProductBySlug(
       success: true,
       data: product,
     });
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("getProductBySlug error:", error);
 
     res.status(500).json({
@@ -191,7 +215,7 @@ export async function getBrands(_req: Request, res: Response): Promise<void> {
       success: true,
       data: brands.sort((a, b) => String(a).localeCompare(String(b))),
     });
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("getBrands error:", error);
 
     res.status(500).json({
@@ -201,23 +225,191 @@ export async function getBrands(_req: Request, res: Response): Promise<void> {
   }
 }
 
+// ============================================
+// ADMIN INVENTORY
+// ============================================
+
+/**
+ * GET /api/v1/products/admin/inventory
+ *
+ * Return all products for the admin inventory page.
+ * Includes published, draft and archived products.
+ */
+export async function getAdminInventory(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    const page = Number(req.query.page ?? DEFAULT_PAGE);
+    const limit = Number(req.query.limit ?? 5);
+
+    if (
+      !Number.isInteger(page) ||
+      page < 1 ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > MAX_LIMIT
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Page must be positive and limit must be between 1 and 100.",
+      });
+      return;
+    }
+
+    const filter: Record<string, unknown> = {};
+
+    if (typeof req.query.search === "string" && req.query.search.trim()) {
+      const search = escapeRegex(req.query.search.trim().slice(0, 100));
+
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { model: { $regex: search, $options: "i" } },
+        { sku: { $regex: search, $options: "i" } },
+        { brand: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    if (
+      typeof req.query.category === "string" &&
+      req.query.category.trim() &&
+      req.query.category.trim().toLowerCase() !== "all"
+    ) {
+      filter.brand = req.query.category.trim();
+    }
+
+    const requestedStatus =
+      typeof req.query.status === "string"
+        ? req.query.status.trim().toLowerCase()
+        : "all";
+
+    if (
+      requestedStatus !== "all" &&
+      !["in_stock", "low_stock", "out_of_stock"].includes(requestedStatus)
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid inventory status filter.",
+        allowedStatuses: ["all", "in_stock", "low_stock", "out_of_stock"],
+      });
+      return;
+    }
+
+    if (requestedStatus === "out_of_stock") {
+      filter.stockQuantity = { $lte: 0 };
+    } else if (requestedStatus === "low_stock") {
+      filter.stockQuantity = {
+        $gt: 0,
+        $lte: LOW_STOCK_THRESHOLD,
+      };
+    } else if (requestedStatus === "in_stock") {
+      filter.stockQuantity = { $gt: LOW_STOCK_THRESHOLD };
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [products, total, summaryResult] = await Promise.all([
+      ProductModel.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      ProductModel.countDocuments(filter),
+
+      ProductModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalProducts: { $sum: 1 },
+            inStock: {
+              $sum: {
+                $cond: [{ $gt: ["$stockQuantity", LOW_STOCK_THRESHOLD] }, 1, 0],
+              },
+            },
+            lowStock: {
+              $sum: {
+                $cond: [
+                  {
+                    $and: [
+                      { $gt: ["$stockQuantity", 0] },
+                      { $lte: ["$stockQuantity", LOW_STOCK_THRESHOLD] },
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+            outOfStock: {
+              $sum: {
+                $cond: [{ $lte: ["$stockQuantity", 0] }, 1, 0],
+              },
+            },
+          },
+        },
+      ]),
+    ]);
+
+    const summary = summaryResult[0] ?? {
+      totalProducts: 0,
+      inStock: 0,
+      lowStock: 0,
+      outOfStock: 0,
+    };
+
+    res.status(200).json({
+      success: true,
+      data: products,
+      summary: {
+        totalProducts: summary.totalProducts,
+        inStock: summary.inStock,
+        lowStock: summary.lowStock,
+        outOfStock: summary.outOfStock,
+      },
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+        hasNextPage: page * limit < total,
+        hasPreviousPage: page > 1,
+      },
+    });
+  } catch (error) {
+    console.error("getAdminInventory error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to retrieve admin inventory.",
+    });
+  }
+}
+
+// ============================================
+// CREATE PRODUCT
+// ============================================
+
 /**
  * POST /api/v1/products
- * Create a product. This route must be admin-protected.
+ * Create and immediately publish a product.
  */
 export async function createProduct(
   req: Request,
   res: Response,
 ): Promise<void> {
   try {
-    const product = await ProductModel.create(req.body);
+    const product = await ProductModel.create({
+      ...req.body,
+      status: "published",
+    });
 
     res.status(201).json({
       success: true,
-      message: "Product created successfully.",
+      message: "Product created and published successfully.",
       data: product,
     });
-  } catch (error: unknown) {
+  } catch (error) {
     if (error instanceof mongoose.Error.ValidationError) {
       res.status(400).json({
         success: false,
@@ -231,9 +423,21 @@ export async function createProduct(
       error instanceof mongoose.mongo.MongoServerError &&
       error.code === 11000
     ) {
+      const duplicateField = Object.keys(
+        (
+          error as mongoose.mongo.MongoServerError & {
+            keyPattern?: Record<string, number>;
+          }
+        ).keyPattern ?? {},
+      )[0];
+
       res.status(409).json({
         success: false,
-        message: "A product with this slug already exists.",
+        message:
+          duplicateField === "sku"
+            ? "A product with this SKU already exists."
+            : "A product with this slug already exists.",
+        field: duplicateField ?? "unknown",
       });
       return;
     }
@@ -247,16 +451,22 @@ export async function createProduct(
   }
 }
 
+// ============================================
+// UPDATE PRODUCT
+// ============================================
+
 /**
  * PATCH /api/v1/products/:id
- * Update an existing product. This route must be admin-protected.
+ * Update an existing product.
  */
 export async function updateProduct(
   req: Request,
   res: Response,
 ): Promise<void> {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
       res.status(400).json({
         success: false,
         message: "Invalid product ID.",
@@ -272,8 +482,14 @@ export async function updateProduct(
       return;
     }
 
-    // Do not allow clients to override MongoDB-managed fields.
-    const { _id, id, createdAt, updatedAt, __v, ...updates } = req.body;
+    const {
+      _id,
+      id: ignoredId,
+      createdAt,
+      updatedAt,
+      __v,
+      ...updates
+    } = req.body;
 
     if (Object.keys(updates).length === 0) {
       res.status(400).json({
@@ -284,10 +500,10 @@ export async function updateProduct(
     }
 
     const product = await ProductModel.findByIdAndUpdate(
-      req.params.id,
+      id,
       { $set: updates },
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       },
     );
@@ -305,7 +521,7 @@ export async function updateProduct(
       message: "Product updated successfully.",
       data: product,
     });
-  } catch (error: unknown) {
+  } catch (error) {
     if (error instanceof mongoose.Error.ValidationError) {
       res.status(400).json({
         success: false,
@@ -319,9 +535,21 @@ export async function updateProduct(
       error instanceof mongoose.mongo.MongoServerError &&
       error.code === 11000
     ) {
+      const duplicateField = Object.keys(
+        (
+          error as mongoose.mongo.MongoServerError & {
+            keyPattern?: Record<string, number>;
+          }
+        ).keyPattern ?? {},
+      )[0];
+
       res.status(409).json({
         success: false,
-        message: "A product with this slug already exists.",
+        message:
+          duplicateField === "sku"
+            ? "A product with this SKU already exists."
+            : "A product with this slug already exists.",
+        field: duplicateField ?? "unknown",
       });
       return;
     }
@@ -335,6 +563,91 @@ export async function updateProduct(
   }
 }
 
+// ============================================
+// UPDATE PRODUCT STOCK
+// ============================================
+
+/**
+ * PATCH /api/v1/products/:id/stock
+ *
+ * Set the new total available stock quantity.
+ * This does not increment or decrement the existing quantity.
+ */
+export async function updateProductStock(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { stockQuantity } = req.body as {
+      stockQuantity?: number;
+    };
+
+    if (!mongoose.isValidObjectId(id)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid product ID.",
+      });
+      return;
+    }
+
+    if (
+      typeof stockQuantity !== "number" ||
+      !Number.isInteger(stockQuantity) ||
+      !Number.isFinite(stockQuantity) ||
+      stockQuantity < 0
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Stock quantity must be a non-negative whole number.",
+      });
+      return;
+    }
+
+    const product = await ProductModel.findByIdAndUpdate(
+      id,
+      { $set: { stockQuantity } },
+      {
+        returnDocument: "after",
+        runValidators: true,
+      },
+    );
+
+    if (!product) {
+      res.status(404).json({
+        success: false,
+        message: "Product not found.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Product stock updated successfully.",
+      data: {
+        id: product.id,
+        sku: product.sku,
+        name: product.name,
+        stockQuantity: product.stockQuantity,
+        inStock: product.stockQuantity > 0,
+        inventoryStatus: getInventoryStatus(product.stockQuantity),
+        updatedAt: product.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("updateProductStock error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to update product stock.",
+    });
+  }
+}
+
+// ============================================
+// ARCHIVE PRODUCT
+// ============================================
+
 /**
  * DELETE /api/v1/products/:id
  * Archive a product rather than permanently deleting it.
@@ -344,7 +657,9 @@ export async function archiveProduct(
   res: Response,
 ): Promise<void> {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
       res.status(400).json({
         success: false,
         message: "Invalid product ID.",
@@ -353,9 +668,12 @@ export async function archiveProduct(
     }
 
     const product = await ProductModel.findByIdAndUpdate(
-      req.params.id,
+      id,
       { $set: { status: "archived" } },
-      { new: true, runValidators: true },
+      {
+        returnDocument: "after",
+        runValidators: true,
+      },
     );
 
     if (!product) {
@@ -370,7 +688,7 @@ export async function archiveProduct(
       success: true,
       message: "Product archived successfully.",
     });
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("archiveProduct error:", error);
 
     res.status(500).json({
@@ -380,9 +698,14 @@ export async function archiveProduct(
   }
 }
 
+// ============================================
+// CLOUDINARY IMAGE UPLOAD FOR EXISTING PRODUCT
+// ============================================
+
 /**
  * POST /api/v1/products/:id/images
- * Upload product images to Cloudinary and store their metadata in MongoDB.
+ *
+ * Upload additional images and attach them to an existing product.
  */
 export async function addProductImages(
   req: Request,
@@ -391,7 +714,9 @@ export async function addProductImages(
   const uploadedPublicIds: string[] = [];
 
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
       res.status(400).json({
         success: false,
         message: "Invalid product ID.",
@@ -409,7 +734,7 @@ export async function addProductImages(
       return;
     }
 
-    const product = await ProductModel.findById(req.params.id);
+    const product = await ProductModel.findById(id);
 
     if (!product) {
       res.status(404).json({
@@ -436,7 +761,7 @@ export async function addProductImages(
     for (const file of files) {
       const uploaded = await uploadImageBuffer(
         file.buffer,
-        "ogim-store/products",
+        PRODUCT_IMAGE_FOLDER,
       );
 
       uploadedPublicIds.push(uploaded.publicId);
@@ -459,21 +784,178 @@ export async function addProductImages(
         images: product.images,
       },
     });
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("addProductImages error:", error);
 
-    // Compensate for failed uploads if saving the product fails.
-    await Promise.allSettled(
-      uploadedPublicIds.map((publicId) =>
-        cloudinary.uploader.destroy(publicId, {
-          resource_type: "image",
-        }),
-      ),
-    );
+    await removeCloudinaryImages(uploadedPublicIds);
 
     res.status(500).json({
       success: false,
       message: "Unable to upload product images.",
+    });
+  }
+}
+
+// ============================================
+// CLOUDINARY IMAGE UPLOAD BEFORE PRODUCT CREATION
+// ============================================
+
+/**
+ * POST /api/v1/products/admin/images
+ *
+ * Upload images before a product is created.
+ * Returns Cloudinary metadata for the frontend.
+ */
+export async function uploadProductImagesToCloudinary(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const uploadedPublicIds: string[] = [];
+
+  try {
+    const files = req.files;
+
+    if (!Array.isArray(files) || files.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: "Select at least one image to upload.",
+      });
+      return;
+    }
+
+    if (files.length > 5) {
+      res.status(400).json({
+        success: false,
+        message: "You can upload a maximum of five images at a time.",
+      });
+      return;
+    }
+
+    const images: {
+      url: string;
+      publicId: string;
+      alt: string;
+    }[] = [];
+
+    for (const file of files) {
+      const uploaded = await uploadImageBuffer(
+        file.buffer,
+        PRODUCT_IMAGE_FOLDER,
+      );
+
+      uploadedPublicIds.push(uploaded.publicId);
+
+      images.push({
+        url: uploaded.url,
+        publicId: uploaded.publicId,
+        alt: file.originalname.replace(/\.[^/.]+$/, "") || "Product image",
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Product images uploaded successfully.",
+      data: images,
+    });
+  } catch (error) {
+    console.error("uploadProductImagesToCloudinary error:", error);
+
+    await removeCloudinaryImages(uploadedPublicIds);
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to upload product images.",
+    });
+  }
+}
+
+// ============================================
+// DELETE TEMPORARY CLOUDINARY PRODUCT IMAGES
+// ============================================
+
+/**
+ * DELETE /api/v1/products/admin/images
+ *
+ * Delete images uploaded before product creation.
+ *
+ * Images already attached to a saved product cannot be deleted
+ * through this temporary-image endpoint.
+ */
+export async function deleteAdminProductImage(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    const { publicIds } = req.body as {
+      publicIds?: unknown;
+    };
+
+    if (
+      !Array.isArray(publicIds) ||
+      publicIds.length === 0 ||
+      publicIds.length > 5 ||
+      !publicIds.every(
+        (id) =>
+          typeof id === "string" && id.startsWith(`${PRODUCT_IMAGE_FOLDER}/`),
+      )
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Provide valid Ogim product image references.",
+      });
+      return;
+    }
+
+    const uniquePublicIds = [...new Set(publicIds as string[])];
+
+    // Prevent deleting images already attached to saved products.
+    const attachedProduct = await ProductModel.exists({
+      "images.publicId": { $in: uniquePublicIds },
+    });
+
+    if (attachedProduct) {
+      res.status(409).json({
+        success: false,
+        message: "One or more images are already attached to a saved product.",
+      });
+      return;
+    }
+
+    const results = await Promise.all(
+      uniquePublicIds.map(async (publicId) => {
+        const result = await cloudinary.uploader.destroy(publicId, {
+          resource_type: "image",
+        });
+
+        return {
+          publicId,
+          success: result.result === "ok" || result.result === "not found",
+        };
+      }),
+    );
+
+    const failed = results.filter((result) => !result.success);
+
+    if (failed.length > 0) {
+      res.status(502).json({
+        success: false,
+        message: "Some product images could not be deleted.",
+        data: results,
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Product images deleted successfully.",
+      data: results,
+    });
+  } catch (error) {
+    console.error("deleteAdminProductImage error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to delete product images.",
     });
   }
 }
