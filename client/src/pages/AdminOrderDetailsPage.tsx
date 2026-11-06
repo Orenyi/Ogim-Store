@@ -13,20 +13,33 @@ import FulfilmentTimeline from "../admin/components/orders/FulfilmentTimeline";
 import OrderStatusModal from "../admin/components/orders/OrderStatusModal";
 
 import { getAdminOrderById } from "../admin/services/adminOrders.service";
+import { apiRequest } from "../lib/api";
 
 import type {
   AdminOrder,
   OrderFulfilmentStatus,
 } from "../admin/types/orders.types";
 
+const USE_DEMO_DATA = import.meta.env.VITE_USE_ADMIN_MOCKS === "true";
+
+interface UpdateOrderStatusResponse {
+  success: boolean;
+  message?: string;
+  data?: unknown;
+}
+
 export default function AdminOrderDetailsPage() {
   const { orderId } = useParams<{ orderId: string }>();
 
   const [order, setOrder] = useState<AdminOrder | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeType, setNoticeType] = useState<"success" | "error" | "info">(
+    "info",
+  );
 
   const loadOrder = useCallback(async () => {
     if (!orderId) {
@@ -54,43 +67,81 @@ export default function AdminOrderDetailsPage() {
     void loadOrder();
   }, [loadOrder]);
 
-  function handleStatusUpdate(status: OrderFulfilmentStatus) {
-    if (!order) return;
+  const handleStatusUpdate = async (status: OrderFulfilmentStatus) => {
+    if (!order || updatingStatus) return;
 
-    const isDemoMode = import.meta.env.VITE_USE_ADMIN_MOCKS === "true";
+    setNotice(null);
 
-    if (!isDemoMode) {
-      setNotice(
-        "Order status updates will be available when the admin API is connected.",
-      );
+    // Demo mode: update the local page state only.
+    if (USE_DEMO_DATA) {
+      const updatedAt = new Date().toISOString();
+
+      setOrder((current) => {
+        if (!current) return current;
+
+        return {
+          ...current,
+          fulfilmentStatus: status,
+          updatedAt,
+        };
+      });
+
       setStatusModalOpen(false);
+      setNoticeType("info");
+      setNotice(
+        "Demo fulfilment status updated locally. This change has not been saved to the database.",
+      );
       return;
     }
 
-    const updatedAt = new Date().toISOString();
+    // Real mode: persist the fulfilment status through the admin API.
+    setUpdatingStatus(true);
 
-    setOrder((current) => {
-      if (!current) return current;
+    try {
+      const response = await apiRequest<UpdateOrderStatusResponse>(
+        `/admin/orders/${encodeURIComponent(order.id)}/status`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        },
+      );
 
-      return {
-        ...current,
-        fulfilmentStatus: status,
-        updatedAt,
-      };
-    });
+      if (!response.success) {
+        throw new Error(
+          response.message || "Unable to update the order status.",
+        );
+      }
 
-    setStatusModalOpen(false);
-    setNotice(
-      "Demo fulfilment status updated locally. This change has not been saved to the database.",
-    );
-  }
+      setStatusModalOpen(false);
+
+      // Reload the saved order so the header and timeline use backend data.
+      await loadOrder();
+
+      setNoticeType("success");
+      setNotice(
+        response.message || "Order fulfilment status updated successfully.",
+      );
+    } catch (err) {
+      setNoticeType("error");
+      setNotice(
+        err instanceof Error
+          ? err.message
+          : "Unable to update the order status. Please try again.",
+      );
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
 
   if (loading) {
     return (
       <div className="space-y-5" role="status">
         <span className="sr-only">Loading order details...</span>
+
         <div className="h-5 w-48 animate-pulse rounded bg-[var(--color-surface-muted)]" />
+
         <div className="h-20 animate-pulse rounded-[var(--radius-card)] bg-[var(--color-surface-muted)]" />
+
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="h-56 animate-pulse rounded-[var(--radius-card)] bg-[var(--color-surface-muted)]" />
           <div className="h-56 animate-pulse rounded-[var(--radius-card)] bg-[var(--color-surface-muted)]" />
@@ -143,11 +194,13 @@ export default function AdminOrderDetailsPage() {
         <Link to="/admin" className="hover:text-[var(--color-accent)]">
           Dashboard
         </Link>
+
         <FiChevronRight size={13} />
 
         <Link to="/admin/orders" className="hover:text-[var(--color-accent)]">
           Orders
         </Link>
+
         <FiChevronRight size={13} />
 
         <span className="font-semibold text-[var(--color-ink)]">
@@ -160,6 +213,7 @@ export default function AdminOrderDetailsPage() {
         <h1 className="font-heading text-3xl font-extrabold tracking-[-0.05em] text-[var(--color-ink)] sm:text-4xl">
           Order Details
         </h1>
+
         <p className="mt-1 text-sm text-[var(--color-muted)] sm:text-base">
           View full order information, payment, items and delivery details.
         </p>
@@ -171,15 +225,30 @@ export default function AdminOrderDetailsPage() {
         onUpdateStatus={() => setStatusModalOpen(true)}
       />
 
-      {/* Local demo notice */}
+      {/* Status update feedback */}
       {notice && (
         <div
           role="status"
-          className="flex items-start justify-between gap-3 rounded-[var(--radius-control)] border border-[var(--color-border)] bg-white px-4 py-3"
+          className={`flex items-start justify-between gap-3 rounded-[var(--radius-control)] border bg-white px-4 py-3 ${
+            noticeType === "success"
+              ? "border-[var(--color-success)]"
+              : noticeType === "error"
+                ? "border-[var(--color-error)]"
+                : "border-[var(--color-border)]"
+          }`}
         >
-          <p className="text-xs leading-5 text-[var(--color-muted)]">
+          <p
+            className={`text-xs leading-5 ${
+              noticeType === "success"
+                ? "text-[var(--color-success)]"
+                : noticeType === "error"
+                  ? "text-[var(--color-error)]"
+                  : "text-[var(--color-muted)]"
+            }`}
+          >
             {notice}
           </p>
+
           <button
             type="button"
             onClick={() => setNotice(null)}
@@ -208,9 +277,14 @@ export default function AdminOrderDetailsPage() {
         </div>
       </div>
 
+      {/* Fulfilment status modal */}
       <OrderStatusModal
         order={statusModalOpen ? order : null}
-        onClose={() => setStatusModalOpen(false)}
+        onClose={() => {
+          if (!updatingStatus) {
+            setStatusModalOpen(false);
+          }
+        }}
         onSave={handleStatusUpdate}
       />
     </div>

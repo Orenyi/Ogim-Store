@@ -756,6 +756,20 @@ export async function verifyOrderPayment(
               paymentStatus: "paid",
               paidPaymentId: currentPayment._id,
               paymentReference: currentPayment.reference,
+
+              // Initialize fulfilment only after successful payment.
+              fulfilmentStatus: "pending_dispatch",
+            },
+
+            // Record the initial system-generated fulfilment event
+            // in the same transaction as order confirmation.
+            $push: {
+              fulfilmentEvents: {
+                status: "pending_dispatch",
+                note: "Payment verified. Order is awaiting dispatch.",
+                adminId: null,
+                createdAt: now,
+              },
             },
           },
           {

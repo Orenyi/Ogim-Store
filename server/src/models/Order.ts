@@ -1,5 +1,22 @@
 import mongoose, { Schema } from "mongoose";
 
+// ============================================
+// FULFILMENT STATUSES
+// ============================================
+
+export const ORDER_FULFILMENT_STATUSES = [
+  "pending_dispatch",
+  "processing",
+  "dispatched",
+  "in_transit",
+  "delivered",
+  "cancelled",
+] as const;
+
+// ============================================
+// ORDER ITEMS
+// ============================================
+
 const orderItemSchema = new Schema(
   {
     productId: {
@@ -65,6 +82,10 @@ const orderItemSchema = new Schema(
   { _id: false },
 );
 
+// ============================================
+// DELIVERY ADDRESS
+// ============================================
+
 const deliveryAddressSchema = new Schema(
   {
     fullName: {
@@ -112,6 +133,49 @@ const deliveryAddressSchema = new Schema(
   },
   { _id: false },
 );
+
+// ============================================
+// FULFILMENT HISTORY EVENT
+// ============================================
+
+const fulfilmentEventSchema = new Schema(
+  {
+    status: {
+      type: String,
+      enum: ORDER_FULFILMENT_STATUSES,
+      required: true,
+    },
+
+    note: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
+    },
+
+    // Null for system-generated events.
+    // Populated for events created by an administrator.
+    adminId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    createdAt: {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+  },
+  {
+    _id: true,
+    versionKey: false,
+  },
+);
+
+// ============================================
+// ORDER
+// ============================================
 
 const orderSchema = new Schema(
   {
@@ -172,6 +236,10 @@ const orderSchema = new Schema(
       enum: ["NGN"],
     },
 
+    // ============================================
+    // ORDER / PAYMENT LIFECYCLE
+    // ============================================
+
     status: {
       type: String,
       enum: ["pending", "confirmed", "cancelled", "expired", "fulfilled"],
@@ -205,6 +273,30 @@ const orderSchema = new Schema(
       default: null,
     },
 
+    // ============================================
+    // FULFILMENT LIFECYCLE
+    // ============================================
+
+    // Separate from the payment/order lifecycle.
+    // Set to pending_dispatch only after successful payment.
+    // No default: unpaid orders must not appear ready for dispatch.
+    fulfilmentStatus: {
+      type: String,
+      enum: ORDER_FULFILMENT_STATUSES,
+      default: undefined,
+    },
+
+    // Actual fulfilment status changes.
+    // Each event records its status, note, actor and timestamp.
+    fulfilmentEvents: {
+      type: [fulfilmentEventSchema],
+      default: [],
+    },
+
+    // ============================================
+    // STOCK RESERVATION
+    // ============================================
+
     reservationExpiresAt: {
       type: Date,
       required: true,
@@ -226,7 +318,9 @@ const orderSchema = new Schema(
 // ============================================
 
 orderSchema.index({ userId: 1, createdAt: -1 });
+
 orderSchema.index({ status: 1, reservationExpiresAt: 1 });
+
 orderSchema.index({ orderNumber: 1 }, { unique: true });
 
 // Find orders by their successful payment reference.
@@ -236,6 +330,16 @@ orderSchema.index(
     sparse: true,
   },
 );
+
+// Admin order filtering and fulfilment management.
+orderSchema.index({
+  fulfilmentStatus: 1,
+  createdAt: -1,
+});
+
+// ============================================
+// MODEL
+// ============================================
 
 const OrderModel =
   mongoose.models.Order || mongoose.model("Order", orderSchema);

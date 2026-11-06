@@ -15,6 +15,7 @@ import OrdersMobileList from "../admin/components/orders/OrdersMobileList";
 import OrdersPagination from "../admin/components/orders/OrdersPagination";
 import OrderStatusBadge from "../admin/components/orders/OrderStatusBadge";
 
+import { apiRequest } from "../lib/api";
 import { getAdminOrders } from "../admin/services/adminOrders.service";
 
 import type {
@@ -23,6 +24,10 @@ import type {
   OrderFulfilmentStatus,
   OrderListFilters,
 } from "../admin/types/orders.types";
+
+// ============================================
+// INITIAL STATE
+// ============================================
 
 const initialFilters: OrderListFilters = {
   search: "",
@@ -40,6 +45,7 @@ const initialResponse: AdminOrdersResponse = {
     inTransit: 0,
     delivered: 0,
     pendingDispatch: 0,
+    unitsSold: 0,
   },
   pagination: {
     page: 1,
@@ -61,6 +67,20 @@ const statusOptions: {
   { value: "cancelled", label: "Cancelled" },
 ];
 
+// ============================================
+// API RESPONSE TYPES
+// ============================================
+
+interface UpdateOrderStatusResponse {
+  success: boolean;
+  message?: string;
+  data: AdminOrder;
+}
+
+// ============================================
+// ADMIN ORDERS PAGE
+// ============================================
+
 export default function AdminOrdersPage() {
   const [response, setResponse] =
     useState<AdminOrdersResponse>(initialResponse);
@@ -71,15 +91,21 @@ export default function AdminOrdersPage() {
   const [limit, setLimit] = useState(8);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
   const [loading, setLoading] = useState(true);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [editingOrder, setEditingOrder] = useState<AdminOrder | null>(null);
+
   const [nextStatus, setNextStatus] =
     useState<OrderFulfilmentStatus>("processing");
 
-  const isDemoMode = import.meta.env.VITE_USE_ADMIN_MOCKS === "true";
+  // ============================================
+  // FETCH REAL ADMIN ORDERS
+  // ============================================
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -99,6 +125,8 @@ export default function AdminOrdersPage() {
       setResponse(result);
       setSelectedIds([]);
     } catch (err) {
+      console.error("Admin orders error:", err);
+
       setError(err instanceof Error ? err.message : "Unable to load orders.");
     } finally {
       setLoading(false);
@@ -110,37 +138,84 @@ export default function AdminOrdersPage() {
       () => {
         void loadOrders();
       },
-      filters.search ? 250 : 0,
+      filters.search ? 300 : 0,
     );
 
     return () => window.clearTimeout(timeout);
   }, [loadOrders, filters.search]);
 
+  // ============================================
+  // FILTER MANAGEMENT
+  // ============================================
+
   function handleFiltersChange(nextFilters: OrderListFilters) {
     setFilters(nextFilters);
     setPage(1);
+    setSelectedIds([]);
   }
 
-  function handleStatusUpdate(orderId: string, status: OrderFulfilmentStatus) {
-    if (!isDemoMode) {
+  // ============================================
+  // UPDATE ORDER FULFILMENT STATUS
+  // ============================================
+
+  async function handleStatusUpdate(
+    orderId: string,
+    status: OrderFulfilmentStatus,
+  ) {
+    if (updatingStatus) return;
+
+    const currentOrder = response.orders.find((order) => order.id === orderId);
+
+    if (!currentOrder) {
       setNotice(
-        "Status updates will be enabled when the admin API is connected.",
+        "The selected order could not be found. Refresh and try again.",
       );
       return;
     }
 
-    setResponse((current) => ({
-      ...current,
-      orders: current.orders.map((order) =>
-        order.id === orderId ? { ...order, fulfilmentStatus: status } : order,
-      ),
-    }));
+    if (currentOrder.fulfilmentStatus === status) {
+      setNotice("The order already has this fulfilment status.");
+      return;
+    }
 
-    setEditingOrder(null);
-    setNotice(
-      "Demo order status updated locally. This change is not saved to the database.",
-    );
+    setUpdatingStatus(true);
+    setNotice(null);
+
+    try {
+      const result = await apiRequest<UpdateOrderStatusResponse>(
+        `/admin/orders/${encodeURIComponent(orderId)}/status`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        },
+      );
+
+      if (!result.success) {
+        throw new Error(result.message || "Unable to update order status.");
+      }
+
+      setEditingOrder(null);
+
+      setNotice(result.message || "Order status updated successfully.");
+
+      // Retrieve the authoritative order and summary from the backend.
+      await loadOrders();
+    } catch (err) {
+      console.error("Order status update error:", err);
+
+      setNotice(
+        err instanceof Error
+          ? err.message
+          : "Unable to update order status. Please try again.",
+      );
+    } finally {
+      setUpdatingStatus(false);
+    }
   }
+
+  // ============================================
+  // OPEN STATUS EDITOR
+  // ============================================
 
   function openStatusEditor(orderId: string) {
     const order = response.orders.find((item) => item.id === orderId);
@@ -150,6 +225,10 @@ export default function AdminOrdersPage() {
     setEditingOrder(order);
     setNextStatus(order.fulfilmentStatus);
   }
+
+  // ============================================
+  // DISPATCH AND CUSTOMER NOTIFICATIONS
+  // ============================================
 
   function handleCreateDispatch(orderId: string) {
     setNotice(
@@ -163,7 +242,16 @@ export default function AdminOrdersPage() {
     );
   }
 
+  // ============================================
+  // EXPORT ORDERS
+  // ============================================
+
   function exportOrders() {
+    if (response.orders.length === 0) {
+      setNotice("There are no orders on this page to export.");
+      return;
+    }
+
     const rows = [
       [
         "Order ID",
@@ -204,19 +292,30 @@ export default function AdminOrdersPage() {
 
     anchor.href = url;
     anchor.download = "ogim-store-orders.csv";
+
+    document.body.appendChild(anchor);
     anchor.click();
+    anchor.remove();
 
     URL.revokeObjectURL(url);
   }
 
-  const handlePageChange = (nextPage: number) => {
-    setPage(nextPage);
-  };
+  // ============================================
+  // PAGINATION
+  // ============================================
 
-  const handleLimitChange = (nextLimit: number) => {
+  function handlePageChange(nextPage: number) {
+    setPage(nextPage);
+  }
+
+  function handleLimitChange(nextLimit: number) {
     setLimit(nextLimit);
     setPage(1);
-  };
+  }
+
+  // ============================================
+  // RENDER
+  // ============================================
 
   return (
     <div className="space-y-5 sm:space-y-6 lg:space-y-7">
@@ -228,26 +327,21 @@ export default function AdminOrdersPage() {
         <Link to="/admin" className="hover:text-[var(--color-accent)]">
           Dashboard
         </Link>
+
         <FiChevronRight size={14} />
+
         <span className="font-semibold text-[var(--color-ink)]">Orders</span>
       </nav>
 
       {/* Page heading */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-3xl font-extrabold tracking-[-0.05em] text-[var(--color-ink)] sm:text-4xl">
-            Orders
-          </h1>
-          <p className="mt-1 text-sm text-[var(--color-muted)] sm:text-base">
-            View, filter and manage customer orders.
-          </p>
-        </div>
+      <div>
+        <h1 className="font-heading text-3xl font-extrabold tracking-[-0.05em] text-[var(--color-ink)] sm:text-4xl">
+          Orders
+        </h1>
 
-        {isDemoMode && (
-          <span className="rounded-full bg-[var(--color-warning-soft)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-warning)]">
-            Demo data
-          </span>
-        )}
+        <p className="mt-1 text-sm text-[var(--color-muted)] sm:text-base">
+          View, filter and manage customer orders.
+        </p>
       </div>
 
       {/* Summary cards */}
@@ -262,6 +356,7 @@ export default function AdminOrdersPage() {
           <p className="text-xs leading-5 text-[var(--color-muted)]">
             {notice}
           </p>
+
           <button
             type="button"
             onClick={() => setNotice(null)}
@@ -285,8 +380,11 @@ export default function AdminOrdersPage() {
         {error ? (
           <div className="flex flex-col items-center justify-center gap-3 px-5 py-12 text-center">
             <FiAlertCircle size={24} className="text-[var(--color-error)]" />
+
             <p className="text-sm font-semibold">Unable to load orders</p>
+
             <p className="text-xs text-[var(--color-muted)]">{error}</p>
+
             <button
               type="button"
               onClick={() => void loadOrders()}
@@ -299,9 +397,11 @@ export default function AdminOrdersPage() {
         ) : loading ? (
           <div className="space-y-4 p-5" role="status">
             <span className="sr-only">Loading orders...</span>
+
             {Array.from({ length: 6 }).map((_, index) => (
               <div key={index} className="flex animate-pulse gap-3">
                 <div className="h-9 w-9 rounded-full bg-[var(--color-surface-muted)]" />
+
                 <div className="flex-1 space-y-2">
                   <div className="h-3 w-1/3 rounded bg-[var(--color-surface-muted)]" />
                   <div className="h-3 w-2/3 rounded bg-[var(--color-surface-muted)]" />
@@ -347,7 +447,7 @@ export default function AdminOrdersPage() {
         <div
           className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-[var(--color-ink)]/50 p-4"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
+            if (!updatingStatus && event.target === event.currentTarget) {
               setEditingOrder(null);
             }
           }}
@@ -366,6 +466,7 @@ export default function AdminOrdersPage() {
                 >
                   Update order status
                 </h2>
+
                 <p className="mt-1 text-xs text-[var(--color-muted)]">
                   {editingOrder.orderNumber}
                 </p>
@@ -374,8 +475,9 @@ export default function AdminOrdersPage() {
               <button
                 type="button"
                 onClick={() => setEditingOrder(null)}
+                disabled={updatingStatus}
                 aria-label="Close dialog"
-                className="rounded-lg p-2 text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)]"
+                className="rounded-lg p-2 text-[var(--color-muted)] hover:bg-[var(--color-surface-muted)] disabled:opacity-50"
               >
                 <FiX size={18} />
               </button>
@@ -385,6 +487,7 @@ export default function AdminOrdersPage() {
               <p className="mb-2 text-xs font-semibold text-[var(--color-ink)]">
                 Current status
               </p>
+
               <OrderStatusBadge status={editingOrder.fulfilmentStatus} />
 
               <label
@@ -397,10 +500,11 @@ export default function AdminOrdersPage() {
               <select
                 id="next-order-status"
                 value={nextStatus}
+                disabled={updatingStatus}
                 onChange={(event) =>
                   setNextStatus(event.target.value as OrderFulfilmentStatus)
                 }
-                className="h-11 w-full rounded-[var(--radius-control)] border border-[var(--color-border-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent)]"
+                className="h-11 w-full rounded-[var(--radius-control)] border border-[var(--color-border-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {statusOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -408,24 +512,44 @@ export default function AdminOrdersPage() {
                   </option>
                 ))}
               </select>
+
+              <p className="mt-2 text-xs leading-5 text-[var(--color-muted)]">
+                Payment verification is managed separately. The backend
+                validates whether this fulfilment transition is allowed.
+              </p>
             </div>
 
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
+                disabled={updatingStatus}
                 onClick={() => setEditingOrder(null)}
-                className="h-11 rounded-[var(--radius-control)] border border-[var(--color-border)] px-4 text-sm font-semibold hover:bg-[var(--color-surface-muted)]"
+                className="h-11 rounded-[var(--radius-control)] border border-[var(--color-border)] px-4 text-sm font-semibold hover:bg-[var(--color-surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
 
               <button
                 type="button"
-                onClick={() => handleStatusUpdate(editingOrder.id, nextStatus)}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-accent)] px-4 text-sm font-semibold text-white hover:bg-[var(--color-accent-hover)]"
+                disabled={
+                  updatingStatus || nextStatus === editingOrder.fulfilmentStatus
+                }
+                onClick={() =>
+                  void handleStatusUpdate(editingOrder.id, nextStatus)
+                }
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-accent)] px-4 text-sm font-semibold text-white hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <FiCheck size={16} />
-                Save status
+                {updatingStatus ? (
+                  <>
+                    <FiRefreshCw size={15} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <FiCheck size={16} />
+                    Save status
+                  </>
+                )}
               </button>
             </div>
           </div>

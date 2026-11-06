@@ -41,6 +41,12 @@ const emptyResponse: CustomersResponse = {
     newCustomers: 0,
     customersWithOrders: 0,
     inactiveAccounts: 0,
+    percentageChanges: {
+      totalCustomers: 0,
+      newCustomers: 0,
+      customersWithOrders: 0,
+      inactiveAccounts: 0,
+    },
   },
   pagination: {
     page: 1,

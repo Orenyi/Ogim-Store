@@ -14,11 +14,19 @@ export interface AdminCustomer {
   joinedAt: string;
 }
 
+export interface CustomersPercentageChanges {
+  totalCustomers: number | null;
+  newCustomers: number | null;
+  customersWithOrders: number | null;
+  inactiveAccounts: number | null;
+}
+
 export interface CustomersSummary {
   totalCustomers: number;
   newCustomers: number;
   customersWithOrders: number;
   inactiveAccounts: number;
+  percentageChanges: CustomersPercentageChanges;
 }
 
 export interface CustomersQuery {

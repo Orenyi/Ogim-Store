@@ -105,9 +105,7 @@ export default function InventoryPage() {
         status: "all",
       }));
 
-      setNotice(
-        "Product added to the demo inventory. It will reset when the page is refreshed until the backend is connected.",
-      );
+      setNotice("Product added to the inventory.");
     } finally {
       setSaving(false);
     }
@@ -129,7 +127,7 @@ export default function InventoryPage() {
     try {
       await updateAdminProductStock(stockProduct.id, quantity);
       setStockProduct(null);
-      setNotice("Stock quantity updated in demo mode.");
+      setNotice("Stock quantity updated.");
       await loadInventory();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update stock.");

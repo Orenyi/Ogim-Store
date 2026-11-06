@@ -43,6 +43,7 @@ export interface OrderAddress {
   city: string;
   state: string;
   country: string;
+  instructions?: string;
 }
 
 export interface OrderDelivery {
@@ -80,6 +81,7 @@ export interface AdminOrder {
   timeline?: OrderTimelineEvent[];
   orderedAt: string;
   updatedAt: string;
+  paymentDetails?: AdminOrderPaymentDetails | null;
 }
 
 export interface OrdersSummary {
@@ -88,6 +90,7 @@ export interface OrdersSummary {
   inTransit: number;
   delivered: number;
   pendingDispatch: number;
+  unitsSold: number;
 }
 
 export interface AdminOrdersResponse {
@@ -122,4 +125,28 @@ export interface OrderListFilters {
   paymentStatus: OrderPaymentStatus | "all";
   startDate: string;
   endDate: string;
+}
+
+export interface AdminOrderPaymentDetails {
+  id: string;
+  gateway: string;
+  channel: string;
+  status: string;
+  amountKobo: number;
+  currency: string;
+  failureReason: string;
+  paidAt: string | null;
+  verifiedAt: string | null;
+  refund: {
+    status: string;
+    amountKobo: number;
+    currency: string;
+    reason: string;
+    failureReason: string;
+    providerId: string;
+    requestedAt: string | null;
+    processedAt: string | null;
+    updatedAt: string | null;
+    attemptCount: number;
+  };
 }

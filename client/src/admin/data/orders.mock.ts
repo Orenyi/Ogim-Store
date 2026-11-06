@@ -306,9 +306,10 @@ export const demoOrders: AdminOrder[] = [
 ];
 
 export const demoOrdersSummary: OrdersSummary = {
-  allOrders: 412,
-  processing: 36,
-  inTransit: 52,
-  delivered: 264,
-  pendingDispatch: 60,
+  allOrders: 0,
+  processing: 0,
+  inTransit: 0,
+  delivered: 0,
+  pendingDispatch: 0,
+  unitsSold: 0,
 };

@@ -1,4 +1,4 @@
-import { demoCustomers, demoCustomersSummary } from "../data/customers.mock";
+import { apiRequest } from "../../lib/api";
 
 import type {
   AdminCustomer,
@@ -6,93 +6,71 @@ import type {
   CustomersResponse,
 } from "../types/customers.types";
 
-const USE_DEMO_DATA = import.meta.env.VITE_USE_ADMIN_MOCKS === "true";
+interface AdminCustomersApiResponse {
+  success: boolean;
+  data: CustomersResponse;
+}
 
-let customersStore: AdminCustomer[] = [...demoCustomers];
+interface UpdateCustomerStatusApiResponse {
+  success: boolean;
+  message: string;
+  data: AdminCustomer;
+}
 
-const wait = (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms));
-
+/**
+ * Fetch customers from the admin API.
+ *
+ * Supports:
+ * - Search by name, email or phone number
+ * - Account status filtering
+ * - Order history filtering
+ * - Pagination
+ * - Customer statistics
+ */
 export async function getAdminCustomers(
   query: CustomersQuery,
 ): Promise<CustomersResponse> {
-  if (!USE_DEMO_DATA) {
-    throw new Error("Admin customers API has not been connected yet.");
+  const params = new URLSearchParams({
+    search: query.search.trim(),
+    status: query.status,
+    hasOrders: query.hasOrders,
+    page: String(query.page),
+    limit: String(query.limit),
+  });
+
+  const response = await apiRequest<AdminCustomersApiResponse>(
+    `/admin/customers?${params.toString()}`,
+  );
+
+  if (!response.success || !response.data) {
+    throw new Error("Unable to retrieve customers.");
   }
 
-  await wait();
-
-  let filtered = [...customersStore];
-
-  // Search by customer name, email or phone number.
-  if (query.search.trim()) {
-    const search = query.search.trim().toLowerCase();
-
-    filtered = filtered.filter((customer) =>
-      [customer.fullName, customer.email, customer.phoneNumber].some((value) =>
-        value.toLowerCase().includes(search),
-      ),
-    );
-  }
-
-  // Filter by account status.
-  if (query.status !== "all") {
-    filtered = filtered.filter((customer) => customer.status === query.status);
-  }
-
-  // Filter customers who have placed orders.
-  if (query.hasOrders === "yes") {
-    filtered = filtered.filter((customer) => customer.totalOrders > 0);
-  }
-
-  // Filter customers who have not placed orders.
-  if (query.hasOrders === "no") {
-    filtered = filtered.filter((customer) => customer.totalOrders === 0);
-  }
-
-  // Pagination.
-  const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / query.limit));
-  const page = Math.min(Math.max(1, query.page), totalPages);
-  const startIndex = (page - 1) * query.limit;
-
-  return {
-    customers: filtered.slice(startIndex, startIndex + query.limit),
-    summary: demoCustomersSummary,
-    pagination: {
-      page,
-      limit: query.limit,
-      total,
-      totalPages,
-    },
-  };
+  return response.data;
 }
 
+/**
+ * Update a customer's account status.
+ *
+ * The backend maps:
+ * - active -> active
+ * - inactive -> disabled
+ */
 export async function updateAdminCustomerStatus(
   customerId: string,
   status: AdminCustomer["status"],
 ): Promise<AdminCustomer> {
-  if (!USE_DEMO_DATA) {
-    throw new Error("Update customer API has not been connected yet.");
-  }
-
-  await wait();
-
-  const index = customersStore.findIndex(
-    (customer) => customer.id === customerId,
+  const response = await apiRequest<UpdateCustomerStatusApiResponse>(
+    `/admin/customers/${encodeURIComponent(customerId)}/status`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    },
   );
 
-  if (index === -1) {
-    throw new Error("Customer could not be found.");
+  if (!response.success || !response.data) {
+    throw new Error("Unable to update customer status.");
   }
 
-  const updatedCustomer: AdminCustomer = {
-    ...customersStore[index],
-    status,
-  };
-
-  customersStore = customersStore.map((customer) =>
-    customer.id === customerId ? updatedCustomer : customer,
-  );
-
-  return updatedCustomer;
+  return response.data;
 }

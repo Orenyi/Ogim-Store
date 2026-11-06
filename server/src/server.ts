@@ -10,6 +10,8 @@ import cartRoutes from "./routes/cart.routes.js";
 import orderRoutes from "./routes/order.routes.js";
 import { startOrderExpirationWorker } from "./workers/order-expiration.worker.js";
 import paystackWebhookRoutes from "./routes/paystack-webhook.routes.js";
+import adminCustomerRoutes from "./routes/admin-customer.routes.js";
+import adminOrderRoutes from "./routes/admin-order.routes.js";
 
 const app = express();
 
@@ -23,6 +25,8 @@ app.use(
     allowedHeaders: ["Content-Type", "X-CSRF-Token", "Authorization"],
   }),
 );
+
+// Paystack webhook must be registered before express.json().
 app.use("/api/v1/payments/paystack/webhook", paystackWebhookRoutes);
 
 app.use(express.json({ limit: "20kb" }));
@@ -40,6 +44,10 @@ app.use("/api/v1/products", productRoutes);
 app.get("/api/v1/brands", getBrands);
 app.use("/api/v1/cart", cartRoutes);
 app.use("/api/v1/orders", orderRoutes);
+
+// Admin routes
+app.use("/api/v1/admin/customers", adminCustomerRoutes);
+app.use("/api/v1/admin/orders", adminOrderRoutes);
 
 async function startServer(): Promise<void> {
   try {

@@ -4,6 +4,8 @@ import {
   FiShoppingCart,
   FiSlash,
   FiTrendingUp,
+  FiTrendingDown,
+  FiMinus,
 } from "react-icons/fi";
 
 import type { CustomersSummary } from "../../types/customers.types";
@@ -14,31 +16,47 @@ type Props = {
 
 const numberFormat = new Intl.NumberFormat("en-NG");
 
+function formatPercentage(value: number | null): string {
+  if (value === null) {
+    return "New";
+  }
+
+  if (value > 0) {
+    return `+${value}%`;
+  }
+
+  return `${value}%`;
+}
+
 export default function CustomerStats({ summary }: Props) {
   const stats = [
     {
       label: "Total Customers",
       value: summary.totalCustomers,
-      change: "+12.5%",
+      change: summary.percentageChanges.totalCustomers,
       icon: FiUsers,
+      inverse: false,
     },
     {
       label: "New Customers",
       value: summary.newCustomers,
-      change: "+8.3%",
+      change: summary.percentageChanges.newCustomers,
       icon: FiUserPlus,
+      inverse: false,
     },
     {
       label: "Customers with Orders",
       value: summary.customersWithOrders,
-      change: "+10.9%",
+      change: summary.percentageChanges.customersWithOrders,
       icon: FiShoppingCart,
+      inverse: false,
     },
     {
       label: "Inactive Accounts",
       value: summary.inactiveAccounts,
-      change: "+2.9%",
+      change: summary.percentageChanges.inactiveAccounts,
       icon: FiSlash,
+      inverse: true,
     },
   ];
 
@@ -46,6 +64,26 @@ export default function CustomerStats({ summary }: Props) {
     <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       {stats.map((stat) => {
         const Icon = stat.icon;
+        const change = stat.change;
+
+        const isNeutral = change === 0;
+        const isIncrease = change !== null && change > 0;
+        const isDecrease = change !== null && change < 0;
+
+        const isNegative =
+          !isNeutral && (stat.inverse ? isIncrease : isDecrease);
+
+        const TrendIcon = isNeutral
+          ? FiMinus
+          : isDecrease
+            ? FiTrendingDown
+            : FiTrendingUp;
+
+        const changeColor = isNeutral
+          ? "bg-[var(--color-stone)] text-[var(--color-muted)]"
+          : isNegative
+            ? "bg-[var(--color-error-soft)] text-[var(--color-error)]"
+            : "bg-[var(--color-success-soft)] text-[var(--color-success)]";
 
         return (
           <article
@@ -61,19 +99,23 @@ export default function CustomerStats({ summary }: Props) {
                 <p className="truncate text-[11px] font-medium text-[var(--color-muted)] sm:text-sm">
                   {stat.label}
                 </p>
+
                 <p className="mt-1 font-heading text-xl font-extrabold tracking-tight text-[var(--color-ink)] sm:text-2xl">
                   {numberFormat.format(stat.value)}
                 </p>
               </div>
             </div>
 
-            <div className="mt-3 flex items-center gap-1.5">
-              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-success-soft)] px-2 py-1 text-[10px] font-bold text-[var(--color-success)] sm:text-xs">
-                <FiTrendingUp size={12} />
-                {stat.change}
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold sm:text-xs ${changeColor}`}
+              >
+                <TrendIcon size={12} />
+                {formatPercentage(change)}
               </span>
+
               <span className="text-[10px] text-[var(--color-muted)] sm:text-xs">
-                this month
+                vs last month
               </span>
             </div>
           </article>
