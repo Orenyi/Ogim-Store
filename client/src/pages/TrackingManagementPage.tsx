@@ -14,11 +14,6 @@ import {
   updateAdminTracking,
 } from "../admin/services/adminTracking.service";
 
-import {
-  demoTrackingOrders,
-  demoTrackingSummary,
-} from "../admin/data/tracking.mock";
-
 import type {
   TrackingOrder,
   TrackingQuery,
@@ -28,6 +23,10 @@ import type {
 } from "../admin/types/tracking.types";
 
 import { getTrackingPartners } from "../admin/utils/tracking.utils";
+
+// ============================================
+// INITIAL STATE
+// ============================================
 
 const initialQuery: TrackingQuery = {
   search: "",
@@ -39,9 +38,16 @@ const initialQuery: TrackingQuery = {
   limit: 5,
 };
 
+const initialSummary: TrackingSummary = {
+  totalTracked: 0,
+  inTransit: 0,
+  delivered: 0,
+  pendingUpdate: 0,
+};
+
 const initialResponse: TrackingResponse = {
   orders: [],
-  summary: demoTrackingSummary,
+  summary: initialSummary,
   pagination: {
     page: 1,
     limit: 5,
@@ -50,23 +56,32 @@ const initialResponse: TrackingResponse = {
   },
 };
 
+// ============================================
+// PAGE
+// ============================================
+
 export default function TrackingManagementPage() {
   const [query, setQuery] = useState<TrackingQuery>(initialQuery);
+
   const [response, setResponse] = useState<TrackingResponse>(initialResponse);
 
-  const [allOrders, setAllOrders] =
-    useState<TrackingOrder[]>(demoTrackingOrders);
+  const [allOrders, setAllOrders] = useState<TrackingOrder[]>([]);
 
   const [selectedOrder, setSelectedOrder] = useState<TrackingOrder | null>(
-    demoTrackingOrders[0] ?? null,
+    null,
   );
 
   const [detailsOrder, setDetailsOrder] = useState<TrackingOrder | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
+
+  // ============================================
+  // LOAD TRACKING ORDERS
+  // ============================================
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -77,13 +92,27 @@ export default function TrackingManagementPage() {
 
       setResponse(result);
 
-      // Keep the current page's records in sync with the form.
-      setAllOrders((current) => {
-        const updated = new Map(current.map((order) => [order.id, order]));
+      // The API is paginated, so keep the form's order list
+      // synchronized with the currently loaded records.
+      setAllOrders(result.orders);
 
-        result.orders.forEach((order) => updated.set(order.id, order));
+      // Refresh selected order data when it appears in the
+      // current API response.
+      setSelectedOrder((current) => {
+        if (!current) return null;
 
-        return Array.from(updated.values());
+        return (
+          result.orders.find((order) => order.id === current.id) ?? current
+        );
+      });
+
+      // Keep the details modal synchronized as well.
+      setDetailsOrder((current) => {
+        if (!current) return null;
+
+        return (
+          result.orders.find((order) => order.id === current.id) ?? current
+        );
       });
     } catch (err) {
       setError(
@@ -98,42 +127,104 @@ export default function TrackingManagementPage() {
     void loadOrders();
   }, [loadOrders]);
 
+  // ============================================
+  // DELIVERY PARTNERS
+  // ============================================
+
   const partners = useMemo(() => getTrackingPartners(allOrders), [allOrders]);
 
-  const summary: TrackingSummary = response.summary ?? demoTrackingSummary;
+  const summary: TrackingSummary = response.summary ?? initialSummary;
 
-  async function handleUpdateTracking(input: TrackingUpdateInput) {
+  // ============================================
+  // UPDATE TRACKING
+  // ============================================
+
+  async function handleUpdateTracking(
+    input: TrackingUpdateInput,
+  ): Promise<void> {
     setSaving(true);
     setError("");
     setFeedback("");
 
     try {
+      // The backend persists the update before returning.
       const updated = await updateAdminTracking(input);
 
+      // Update the form's order list.
       setAllOrders((current) =>
         current.map((order) => (order.id === updated.id ? updated : order)),
       );
 
-      setSelectedOrder(updated);
+      // Update the selected order and its timeline.
+      setSelectedOrder((current) =>
+        current?.id === updated.id ? updated : current,
+      );
 
+      // Update the details modal if it is showing this order.
       setDetailsOrder((current) =>
         current?.id === updated.id ? updated : current,
       );
 
       setFeedback(`${updated.orderId} tracking updated successfully.`);
 
-      // Refresh the table using the active search and filters.
+      // Reload the current page to get authoritative records
+      // and updated summary information from the backend.
       const result = await getAdminTrackingOrders(query);
+
       setResponse(result);
+      setAllOrders(result.orders);
+
+      // Preserve the updated order even if it is no longer
+      // included in the current filtered page.
+      setSelectedOrder((current) => {
+        if (!current || current.id !== updated.id) {
+          return current;
+        }
+
+        return (
+          result.orders.find((order) => order.id === updated.id) ?? updated
+        );
+      });
+
+      setDetailsOrder((current) => {
+        if (!current || current.id !== updated.id) {
+          return current;
+        }
+
+        return (
+          result.orders.find((order) => order.id === updated.id) ?? updated
+        );
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Unable to update tracking information.";
+
+      setError(message);
+
+      // Re-throw so the form can also display the error.
+      throw err;
     } finally {
       setSaving(false);
     }
   }
 
-  function handleExport() {
+  // ============================================
+  // EXPORT TRACKING ORDERS
+  // ============================================
+
+  function handleExport(): void {
+    if (!response.orders.length) {
+      setError("There are no tracking orders to export.");
+      return;
+    }
+
     const headers = [
       "Order ID",
       "Customer",
+      "Email",
+      "Phone",
       "Tracking Number",
       "Delivery Partner",
       "Destination",
@@ -144,6 +235,8 @@ export default function TrackingManagementPage() {
     const rows = response.orders.map((order) => [
       order.orderId,
       order.customer.fullName,
+      order.customer.email,
+      order.customer.phoneNumber,
       order.trackingNumber,
       order.deliveryPartner,
       order.destination,
@@ -153,7 +246,9 @@ export default function TrackingManagementPage() {
 
     const csv = [headers, ...rows]
       .map((row) =>
-        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","),
+        row
+          .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
+          .join(","),
       )
       .join("\n");
 
@@ -166,19 +261,40 @@ export default function TrackingManagementPage() {
 
     anchor.href = url;
     anchor.download = "ogim-tracking-orders.csv";
+
+    document.body.appendChild(anchor);
     anchor.click();
+    anchor.remove();
 
     URL.revokeObjectURL(url);
   }
 
-  function handleSelectOrder(order: TrackingOrder | null) {
+  // ============================================
+  // SELECT ORDER
+  // ============================================
+
+  function handleSelectOrder(order: TrackingOrder | null): void {
     setSelectedOrder(order);
     setFeedback("");
+    setError("");
   }
+
+  // ============================================
+  // OPEN ORDER DETAILS
+  // ============================================
+
+  function handleOpenDetails(order: TrackingOrder): void {
+    setDetailsOrder(order);
+  }
+
+  // ============================================
+  // RENDER
+  // ============================================
 
   return (
     <main className="min-w-0 space-y-5 pb-8">
-      {/* Page heading */}
+      {/* PAGE HEADING */}
+
       <div>
         <nav
           aria-label="Breadcrumb"
@@ -198,10 +314,12 @@ export default function TrackingManagementPage() {
         </p>
       </div>
 
-      {/* Summary cards */}
+      {/* SUMMARY CARDS */}
+
       <TrackingStats summary={summary} />
 
-      {/* Orders list */}
+      {/* TRACKING ORDERS */}
+
       <section className="space-y-4 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-white)] p-3 shadow-[var(--shadow-card)] sm:p-4">
         <TrackingToolbar
           query={query}
@@ -210,15 +328,19 @@ export default function TrackingManagementPage() {
           onExport={handleExport}
         />
 
+        {/* ERROR MESSAGE */}
+
         {error && (
           <div
             role="alert"
             className="flex items-start gap-2 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-soft)] p-3 text-sm text-[var(--color-error)]"
           >
             <FiAlertCircle className="mt-0.5 shrink-0" />
-            {error}
+            <span>{error}</span>
           </div>
         )}
+
+        {/* SUCCESS MESSAGE */}
 
         {feedback && (
           <p
@@ -229,15 +351,15 @@ export default function TrackingManagementPage() {
           </p>
         )}
 
+        {/* TABLE */}
+
         <div className="overflow-visible rounded-xl border border-[var(--color-border)]">
           <TrackingOrdersTable
             orders={response.orders}
             loading={loading}
-            onSelect={setDetailsOrder}
+            onSelect={handleOpenDetails}
             onUpdate={(order) => {
-              setSelectedOrder(order);
-              setFeedback("");
-              setError("");
+              handleSelectOrder(order);
             }}
           />
 
@@ -248,7 +370,10 @@ export default function TrackingManagementPage() {
               total={response.pagination.total}
               limit={response.pagination.limit}
               onPageChange={(page) =>
-                setQuery((current) => ({ ...current, page }))
+                setQuery((current) => ({
+                  ...current,
+                  page,
+                }))
               }
               onLimitChange={(limit) =>
                 setQuery((current) => ({
@@ -262,7 +387,8 @@ export default function TrackingManagementPage() {
         </div>
       </section>
 
-      {/* Update form and timeline */}
+      {/* UPDATE FORM AND TIMELINE */}
+
       <section className="grid min-w-0 gap-4 xl:grid-cols-2">
         <UpdateTrackingForm
           orders={allOrders}
@@ -282,7 +408,8 @@ export default function TrackingManagementPage() {
         />
       </section>
 
-      {/* Order details modal */}
+      {/* ORDER DETAILS MODAL */}
+
       <TrackingOrderDetailsModal
         order={detailsOrder}
         onClose={() => setDetailsOrder(null)}

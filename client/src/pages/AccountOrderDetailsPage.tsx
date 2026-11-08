@@ -20,6 +20,7 @@ import {
   ApiError,
   getCustomerOrderById,
   type OrderApiRecord,
+  type OrderFulfilmentStatus,
 } from "../lib/api";
 
 import {
@@ -36,17 +37,21 @@ import {
 
 type PageStatus = "loading" | "success" | "error" | "not-found";
 
+type TimelineStep = {
+  label: string;
+  statuses: OrderFulfilmentStatus[];
+};
+
+type TrackingEvent = NonNullable<OrderApiRecord["fulfilmentEvents"]>[number];
+
 // ============================================
 // STATUS STYLES
 // ============================================
 
 const statusClasses: Record<OrderStatus, string> = {
   Delivered: "bg-[var(--color-success-soft)] text-[var(--color-success)]",
-
   Processing: "bg-[var(--color-warning-soft)] text-[var(--color-warning)]",
-
   Shipped: "bg-sky-100 text-sky-700",
-
   Cancelled: "bg-[var(--color-stone)] text-[var(--color-muted)]",
 };
 
@@ -57,13 +62,34 @@ const paymentStatusClasses: Record<PaymentStatus, string> = {
   Refunded: "bg-sky-100 text-sky-700",
 };
 
-const progressSteps = ["Order placed", "Processing", "Shipped", "Delivered"];
+// Only these milestones are displayed.
+// Actual event notes and timestamps come from the backend.
+const progressSteps: TimelineStep[] = [
+  {
+    label: "Order placed",
+    statuses: [],
+  },
+  {
+    label: "Processing",
+    statuses: ["pending_dispatch", "processing"],
+  },
+  {
+    label: "Shipped",
+    statuses: ["dispatched", "in_transit"],
+  },
+  {
+    label: "Delivered",
+    statuses: ["delivered"],
+  },
+];
 
 // ============================================
 // DATE FORMATTING
 // ============================================
 
-function formatOrderDate(date: string): string {
+function formatOrderDate(date?: string | null): string {
+  if (!date) return "";
+
   const parsedDate = new Date(date);
 
   if (Number.isNaN(parsedDate.getTime())) {
@@ -79,18 +105,50 @@ function formatOrderDate(date: string): string {
   }).format(parsedDate);
 }
 
+function formatDeliveryDate(date?: string | null): string {
+  if (!date) return "Not yet available";
+
+  const parsedDate = new Date(date);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Not yet available";
+  }
+
+  return new Intl.DateTimeFormat("en-NG", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(parsedDate);
+}
+
 // ============================================
 // ORDER STATUS MAPPING
 // ============================================
 
-function mapOrderStatus(status: OrderApiRecord["status"]): OrderStatus {
-  switch (status) {
-    case "fulfilled":
+function mapOrderStatus(order: OrderApiRecord): OrderStatus {
+  if (order.fulfilmentStatus === "cancelled") {
+    return "Cancelled";
+  }
+
+  switch (order.fulfilmentStatus) {
+    case "delivered":
       return "Delivered";
 
-    case "cancelled":
-    case "expired":
-      return "Cancelled";
+    case "dispatched":
+    case "in_transit":
+      return "Shipped";
+
+    case "pending_dispatch":
+    case "processing":
+      return "Processing";
+
+    default:
+      break;
+  }
+
+  switch (order.status) {
+    case "fulfilled":
+      return "Delivered";
 
     case "confirmed":
     case "pending":
@@ -160,66 +218,66 @@ function mapDeliveryMethod(method: OrderApiRecord["deliveryMethod"]): string {
 }
 
 // ============================================
+// FULFILMENT EVENT MAPPING
+// ============================================
+
+function getFulfilmentEventLabel(status: OrderFulfilmentStatus): string {
+  switch (status) {
+    case "pending_dispatch":
+      return "Awaiting dispatch";
+
+    case "processing":
+      return "Processing";
+
+    case "dispatched":
+      return "Dispatched";
+
+    case "in_transit":
+      return "In transit";
+
+    case "delivered":
+      return "Delivered";
+
+    case "cancelled":
+      return "Cancelled";
+
+    default:
+      return "Order update";
+  }
+}
+
+function getFulfilmentEventDescription(event: TrackingEvent): string {
+  return event.note?.trim() || getFulfilmentEventLabel(event.status);
+}
+
+// ============================================
 // ORDER TIMELINE
 // ============================================
 
 function createOrderTimeline(order: OrderApiRecord): CustomerOrder["timeline"] {
-  const placedDate = formatOrderDate(order.createdAt);
-
-  if (order.status === "cancelled" || order.status === "expired") {
-    return [
-      {
-        label: "Order placed",
-        description: "Your order was received.",
-        date: placedDate,
-        completed: true,
-      },
-      {
-        label: "Cancelled",
-        description:
-          order.status === "expired"
-            ? "The order reservation expired before payment was completed."
-            : "This order was cancelled.",
-        date: formatOrderDate(order.updatedAt),
-        completed: true,
-      },
-    ];
-  }
-
-  const isConfirmed =
-    order.status === "confirmed" || order.status === "fulfilled";
-
-  const isFulfilled = order.status === "fulfilled";
-
-  return [
+  const timeline: CustomerOrder["timeline"] = [
     {
       label: "Order placed",
       description: "Your order was successfully received.",
-      date: placedDate,
+      date: formatOrderDate(order.createdAt),
       completed: true,
     },
-    {
-      label: "Processing",
-      description: isConfirmed
-        ? "Your order has been confirmed."
-        : "Your order is awaiting confirmation.",
-      date: isConfirmed ? formatOrderDate(order.updatedAt) : undefined,
-      completed: isConfirmed,
-    },
-    {
-      label: "Shipped",
-      description: "Awaiting dispatch information.",
-      completed: false,
-    },
-    {
-      label: "Delivered",
-      description: isFulfilled
-        ? "Your order has been fulfilled."
-        : "Awaiting delivery.",
-      date: isFulfilled ? formatOrderDate(order.updatedAt) : undefined,
-      completed: isFulfilled,
-    },
   ];
+
+  const persistedEvents = [...(order.fulfilmentEvents ?? [])].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  );
+
+  for (const event of persistedEvents) {
+    timeline.push({
+      label: getFulfilmentEventLabel(event.status),
+      description: getFulfilmentEventDescription(event),
+      date: formatOrderDate(event.createdAt),
+      completed: true,
+    });
+  }
+
+  return timeline;
 }
 
 // ============================================
@@ -227,15 +285,16 @@ function createOrderTimeline(order: OrderApiRecord): CustomerOrder["timeline"] {
 // ============================================
 
 function mapOrderToCustomerOrder(order: OrderApiRecord): CustomerOrder {
+  const dispatch = order.dispatch;
+
   return {
-    // Keep the MongoDB ID here because it is used by the detail route.
     id: order._id,
 
     createdAt: order.createdAt,
 
     date: formatOrderDate(order.createdAt),
 
-    status: mapOrderStatus(order.status),
+    status: mapOrderStatus(order),
 
     items: order.items.map((item) => ({
       id: item.productId,
@@ -267,9 +326,11 @@ function mapOrderToCustomerOrder(order: OrderApiRecord): CustomerOrder {
 
     deliveryMethod: mapDeliveryMethod(order.deliveryMethod),
 
-    estimatedDelivery: "",
+    estimatedDelivery: dispatch?.estimatedDelivery
+      ? formatDeliveryDate(dispatch.estimatedDelivery)
+      : "",
 
-    trackingNumber: "",
+    trackingNumber: dispatch?.trackingNumber ?? "",
 
     paymentMethod: "Paystack",
 
@@ -331,7 +392,13 @@ function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
 // ORDER TIMELINE COMPONENT
 // ============================================
 
-function OrderTimeline({ order }: { order: CustomerOrder }) {
+function OrderTimeline({
+  order,
+  fulfilmentStatus,
+}: {
+  order: CustomerOrder;
+  fulfilmentStatus?: OrderFulfilmentStatus;
+}) {
   if (order.status === "Cancelled") {
     return (
       <div className="rounded-[var(--radius-control)] bg-[var(--color-error-soft)] p-4">
@@ -355,53 +422,124 @@ function OrderTimeline({ order }: { order: CustomerOrder }) {
     );
   }
 
-  const currentStep =
-    order.status === "Delivered" ? 3 : order.status === "Shipped" ? 2 : 1;
+  const currentStepIndex = fulfilmentStatus
+    ? progressSteps.findIndex((step) =>
+        step.statuses.includes(fulfilmentStatus),
+      )
+    : 0;
+
+  const activeStep = currentStepIndex >= 0 ? currentStepIndex : 0;
 
   return (
-    <div className="grid grid-cols-4 gap-2">
-      {progressSteps.map((step, index) => {
-        const event = order.timeline.find((entry) => entry.label === step);
+    <div className="space-y-6">
+      {/* Progress milestones */}
+      <div className="grid grid-cols-4 gap-2">
+        {progressSteps.map((step, index) => {
+          const event = order.timeline
+            .filter((entry) => entry.label === step.label)
+            .at(-1);
 
-        const complete = event?.completed ?? index <= currentStep;
+          const isPlaced = index === 0;
+          const isCompleted = isPlaced || index <= activeStep;
 
-        return (
-          <div key={step} className="min-w-0">
-            <div
-              className={`relative mb-3 grid h-7 w-7 place-items-center rounded-full ${
-                complete
-                  ? "bg-[var(--color-accent)] text-white"
-                  : "bg-[var(--color-stone)] text-[var(--color-muted)]"
-              }`}
-            >
-              {complete ? (
-                <FiCheck size={15} aria-hidden="true" />
-              ) : (
-                <span className="text-xs">{index + 1}</span>
-              )}
+          const hasActualEvent =
+            isPlaced ||
+            order.timeline.some((entry) => entry.label === step.label);
 
-              {index < progressSteps.length - 1 && (
-                <span
-                  className={`absolute left-full top-1/2 h-0.5 w-[calc(100%+0.5rem)] -translate-y-1/2 ${
-                    complete && event?.completed
-                      ? "bg-[var(--color-accent)]"
-                      : "bg-[var(--color-border)]"
-                  }`}
-                  aria-hidden="true"
-                />
-              )}
+          const isCurrent =
+            index === activeStep && fulfilmentStatus !== "delivered";
+
+          return (
+            <div key={step.label} className="min-w-0">
+              <div
+                className={`relative mb-3 grid h-7 w-7 place-items-center rounded-full ${
+                  isCompleted
+                    ? "bg-[var(--color-accent)] text-white"
+                    : "bg-[var(--color-stone)] text-[var(--color-muted)]"
+                }`}
+              >
+                {isCompleted ? (
+                  <FiCheck size={15} aria-hidden="true" />
+                ) : (
+                  <span className="text-xs">{index + 1}</span>
+                )}
+
+                {index < progressSteps.length - 1 && (
+                  <span
+                    className={`absolute left-full top-1/2 h-0.5 w-[calc(100%+0.5rem)] -translate-y-1/2 ${
+                      isCompleted
+                        ? "bg-[var(--color-accent)]"
+                        : "bg-[var(--color-border)]"
+                    }`}
+                    aria-hidden="true"
+                  />
+                )}
+              </div>
+
+              <p className="text-[10px] font-semibold leading-4 text-[var(--color-ink)] sm:text-xs">
+                {step.label}
+              </p>
+
+              <p className="mt-1 hidden text-[10px] leading-4 text-[var(--color-muted)] sm:block">
+                {event?.date ??
+                  (hasActualEvent && isCompleted
+                    ? "Completed"
+                    : isCurrent
+                      ? "Current stage"
+                      : "Pending")}
+              </p>
             </div>
+          );
+        })}
+      </div>
 
-            <p className="text-[10px] font-semibold leading-4 text-[var(--color-ink)] sm:text-xs">
-              {step}
-            </p>
+      {/* Persisted tracking events */}
+      {order.timeline.length > 1 ? (
+        <div className="border-t border-[var(--color-border)] pt-5">
+          <h3 className="mb-4 text-xs font-bold text-[var(--color-ink)]">
+            Tracking history
+          </h3>
 
-            <p className="mt-1 hidden text-[10px] leading-4 text-[var(--color-muted)] sm:block">
-              {event?.date ?? (complete ? "Completed" : "Pending")}
-            </p>
+          <div className="space-y-4">
+            {[...order.timeline]
+              .slice(1)
+              .reverse()
+              .map((event, index) => (
+                <div
+                  key={`${event.label}-${event.date}-${index}`}
+                  className="flex gap-3"
+                >
+                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+                    <FiCheck size={14} aria-hidden="true" />
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-[var(--color-ink)]">
+                        {event.label}
+                      </p>
+
+                      {event.date && (
+                        <span className="text-[10px] text-[var(--color-muted)]">
+                          {event.date}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">
+                      {event.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
           </div>
-        );
-      })}
+        </div>
+      ) : (
+        <p className="border-t border-[var(--color-border)] pt-4 text-xs leading-5 text-[var(--color-muted)]">
+          Your order has been received. Tracking updates will appear here as
+          they are published.
+        </p>
+      )}
     </div>
   );
 }
@@ -413,9 +551,7 @@ function OrderTimeline({ order }: { order: CustomerOrder }) {
 function OrderItemRow({ item }: { item: CustomerOrder["items"][number] }) {
   const conditionClasses: Record<ProductCondition, string> = {
     "Brand New": "bg-[var(--color-success-soft)] text-[var(--color-success)]",
-
     "UK-Used": "bg-[var(--color-warning-soft)] text-[var(--color-warning)]",
-
     Refurbished: "bg-sky-100 text-sky-700",
   };
 
@@ -518,9 +654,13 @@ function OrderSummary({
 function OrderDetailsContent({
   order,
   orderNumber,
+  fulfilmentStatus,
+  dispatch,
 }: {
   order: CustomerOrder;
   orderNumber: string;
+  fulfilmentStatus?: OrderFulfilmentStatus;
+  dispatch: OrderApiRecord["dispatch"];
 }) {
   const subtotal = order.items.reduce(
     (total, item) => total + item.price * item.quantity,
@@ -537,6 +677,8 @@ function OrderDetailsContent({
           : "Payment was unsuccessful.";
 
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+
+  const dispatchStatusLabel = dispatch ? dispatch.status.replace("_", " ") : "";
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -589,7 +731,7 @@ function OrderDetailsContent({
           Order progress
         </h2>
 
-        <OrderTimeline order={order} />
+        <OrderTimeline order={order} fulfilmentStatus={fulfilmentStatus} />
       </section>
 
       {/* Delivery information */}
@@ -634,23 +776,75 @@ function OrderDetailsContent({
 
             <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">
               {order.status === "Delivered"
-                ? "Your order has been fulfilled."
+                ? "Your order has been delivered."
                 : order.status === "Cancelled"
                   ? "Delivery was cancelled."
-                  : "Delivery date and dispatch information will be updated when available."}
+                  : dispatch
+                    ? `Your order is currently ${dispatchStatusLabel}.`
+                    : "Dispatch information will appear here once your order has been assigned for delivery."}
             </p>
           </div>
         </div>
 
-        {order.trackingNumber && (
-          <div className="mt-4 rounded-[var(--radius-control)] bg-[var(--color-paper)] p-3">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-muted)]">
-              Tracking reference
-            </p>
+        {dispatch && (
+          <div className="mt-4 space-y-3 rounded-[var(--radius-control)] bg-[var(--color-paper)] p-3">
+            {dispatch.deliveryPartner && (
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-muted)]">
+                  Delivery partner
+                </p>
 
-            <p className="mt-1 break-all text-xs font-semibold text-[var(--color-ink)]">
-              {order.trackingNumber}
-            </p>
+                <p className="mt-1 text-xs font-semibold text-[var(--color-ink)]">
+                  {dispatch.deliveryPartner}
+                </p>
+              </div>
+            )}
+
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-muted)]">
+                Estimated delivery
+              </p>
+
+              <p className="mt-1 text-xs font-semibold text-[var(--color-ink)]">
+                {formatDeliveryDate(dispatch.estimatedDelivery)}
+              </p>
+            </div>
+
+            {dispatch.trackingNumber && (
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-muted)]">
+                  Tracking reference
+                </p>
+
+                <p className="mt-1 break-all text-xs font-semibold text-[var(--color-ink)]">
+                  {dispatch.trackingNumber}
+                </p>
+              </div>
+            )}
+
+            {dispatch.dispatchedAt && (
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-muted)]">
+                  Dispatched on
+                </p>
+
+                <p className="mt-1 text-xs font-semibold text-[var(--color-ink)]">
+                  {formatOrderDate(dispatch.dispatchedAt)}
+                </p>
+              </div>
+            )}
+
+            {dispatch.deliveredAt && (
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-muted)]">
+                  Delivered on
+                </p>
+
+                <p className="mt-1 text-xs font-semibold text-[var(--color-ink)]">
+                  {formatOrderDate(dispatch.deliveredAt)}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -729,6 +923,8 @@ export default function AccountOrderDetailsPage() {
 
   const [order, setOrder] = useState<CustomerOrder | null>(null);
 
+  const [apiOrder, setApiOrder] = useState<OrderApiRecord | null>(null);
+
   const [orderNumber, setOrderNumber] = useState("");
 
   const [pageStatus, setPageStatus] = useState<PageStatus>("loading");
@@ -758,10 +954,11 @@ export default function AccountOrderDetailsPage() {
 
         if (!isMounted) return;
 
-        const apiOrder = response.data.order;
+        const fetchedOrder = response.data.order;
 
-        setOrder(mapOrderToCustomerOrder(apiOrder));
-        setOrderNumber(apiOrder.orderNumber);
+        setApiOrder(fetchedOrder);
+        setOrder(mapOrderToCustomerOrder(fetchedOrder));
+        setOrderNumber(fetchedOrder.orderNumber);
 
         setPageStatus("success");
       } catch (error: unknown) {
@@ -807,13 +1004,18 @@ export default function AccountOrderDetailsPage() {
           </div>
         )}
 
-        {pageStatus === "success" && order && (
+        {pageStatus === "success" && order && apiOrder && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25 }}
           >
-            <OrderDetailsContent order={order} orderNumber={orderNumber} />
+            <OrderDetailsContent
+              order={order}
+              orderNumber={orderNumber}
+              fulfilmentStatus={apiOrder.fulfilmentStatus}
+              dispatch={apiOrder.dispatch}
+            />
           </motion.div>
         )}
 

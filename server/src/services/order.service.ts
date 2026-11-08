@@ -5,6 +5,7 @@ import OrderModel from "../models/Order.js";
 import CartModel from "../models/Cart.js";
 import ProductModel from "../models/product.model.js";
 import Payment from "../models/Payment.js";
+import DispatchModel from "../models/Dispatch.js";
 
 import type { CreateOrderInput } from "../validators/order.validation.js";
 
@@ -44,6 +45,32 @@ interface RemainingCartItem {
   quantity: number;
   priceAtAddition: number;
 }
+
+// ============================================
+// CUSTOMER TRACKING RESPONSE TYPES
+// ============================================
+
+interface CustomerFulfilmentEvent {
+  id: string;
+  status: string;
+  note: string;
+  createdAt: Date;
+}
+
+interface CustomerDispatchInfo {
+  deliveryPartner: string | null;
+  trackingNumber: string | null;
+  status: string;
+  estimatedDelivery: Date | null;
+  dispatchedAt: Date | null;
+  deliveredAt: Date | null;
+}
+
+type CustomerOrderWithTracking = Record<string, unknown> & {
+  fulfilmentStatus?: string;
+  fulfilmentEvents: CustomerFulfilmentEvent[];
+  dispatch: CustomerDispatchInfo | null;
+};
 
 // ============================================
 // ORDER NUMBER
@@ -128,6 +155,108 @@ function validateOrderItems(items: OrderItemInput[]): void {
 
     productIds.add(item.productId);
   }
+}
+
+// ============================================
+// CUSTOMER TRACKING MAPPER
+// ============================================
+
+function mapCustomerFulfilmentEvents(
+  events: Array<{
+    _id?: mongoose.Types.ObjectId;
+    status: string;
+    note?: string;
+    createdAt: Date;
+  }>,
+): CustomerFulfilmentEvent[] {
+  return events
+    .map((event) => ({
+      id: event._id?.toString() ?? "",
+      status: event.status,
+      note: event.note ?? "",
+      createdAt: event.createdAt,
+    }))
+    .sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+}
+
+function mapCustomerDispatch(
+  dispatch:
+    | {
+        deliveryPartner?: string | null;
+        trackingNumber?: string | null;
+        status: string;
+        estimatedDelivery?: Date | null;
+        dispatchedAt?: Date | null;
+        deliveredAt?: Date | null;
+      }
+    | null
+    | undefined,
+): CustomerDispatchInfo | null {
+  if (!dispatch) {
+    return null;
+  }
+
+  return {
+    deliveryPartner: dispatch.deliveryPartner ?? null,
+    trackingNumber: dispatch.trackingNumber ?? null,
+    status: dispatch.status,
+    estimatedDelivery: dispatch.estimatedDelivery ?? null,
+    dispatchedAt: dispatch.dispatchedAt ?? null,
+    deliveredAt: dispatch.deliveredAt ?? null,
+  };
+}
+
+// ============================================
+// ATTACH CUSTOMER TRACKING TO ORDERS
+// ============================================
+
+async function attachCustomerTracking<
+  T extends {
+    _id: mongoose.Types.ObjectId;
+    fulfilmentStatus?: string;
+    fulfilmentEvents?: Array<{
+      _id?: mongoose.Types.ObjectId;
+      status: string;
+      note?: string;
+      createdAt: Date;
+    }>;
+  },
+>(orders: T[], userId: string): Promise<CustomerOrderWithTracking[]> {
+  if (orders.length === 0) {
+    return [];
+  }
+
+  const orderIds = orders.map((order) => order._id);
+
+  // Retrieve dispatch records belonging to these orders
+  // and the authenticated customer only.
+  const dispatches = await DispatchModel.find({
+    orderId: { $in: orderIds },
+    userId,
+  })
+    .select(
+      "orderId deliveryPartner trackingNumber status estimatedDelivery dispatchedAt deliveredAt",
+    )
+    .lean();
+
+  const dispatchMap = new Map(
+    dispatches.map((dispatch) => [dispatch.orderId.toString(), dispatch]),
+  );
+
+  return orders.map((order) => {
+    const dispatch = dispatchMap.get(order._id.toString());
+
+    return {
+      ...order,
+      fulfilmentEvents: mapCustomerFulfilmentEvents(
+        order.fulfilmentEvents ?? [],
+      ),
+      dispatch: mapCustomerDispatch(dispatch),
+    };
+  });
 }
 
 // ============================================
@@ -416,8 +545,6 @@ async function restoreOrderStock(
       // ============================================
       // 1. CLAIM ORDER FOR STOCK RESTORATION
       // ============================================
-      // Only one transaction can change a pending order
-      // and restore its reserved stock.
 
       const filter: Record<string, unknown> = {
         _id: orderId,
@@ -462,9 +589,6 @@ async function restoreOrderStock(
       // ============================================
       // 2. CLOSE ACTIVE PAYMENT ATTEMPTS
       // ============================================
-      // These attempts are closed locally, not deleted.
-      // The verification service must still be allowed to
-      // check them with Paystack for a possible late charge.
 
       const closedPaymentStatus =
         nextStatus === "cancelled" ? "abandoned" : "expired";
@@ -586,8 +710,6 @@ export async function expirePendingOrders(): Promise<number> {
 
       expiredCount += 1;
     } catch (error: unknown) {
-      // Another worker or request may already have cancelled,
-      // expired or paid for this order.
       if (error instanceof OrderServiceError && error.statusCode === 409) {
         continue;
       }
@@ -615,7 +737,7 @@ export async function getCustomerOrders(userId: string) {
     .sort({ createdAt: -1 })
     .lean();
 
-  return orders;
+  return attachCustomerTracking(orders, userId);
 }
 
 // ============================================
@@ -640,5 +762,7 @@ export async function getCustomerOrderById(userId: string, orderId: string) {
     throw new OrderServiceError("Order not found.", 404);
   }
 
-  return order;
+  const [orderWithTracking] = await attachCustomerTracking([order], userId);
+
+  return orderWithTracking;
 }

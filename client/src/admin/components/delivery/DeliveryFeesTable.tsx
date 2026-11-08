@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   FiMoreHorizontal,
@@ -9,6 +10,7 @@ import {
   FiTrash2,
   FiMapPin,
 } from "react-icons/fi";
+
 import type { DeliveryFee } from "../../types/delivery.types";
 import DeliveryStatusBadge from "./DeliveryStatusBadge";
 import { formatDeliveryCurrency } from "../../utils/delivery.utils";
@@ -36,6 +38,9 @@ function DeliveryFeeActions({
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, right: 0 });
+
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const actions = [
     {
@@ -64,59 +69,112 @@ function DeliveryFeeActions({
     },
   ];
 
+  function toggleMenu() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+
+    const button = buttonRef.current;
+
+    if (!button) return;
+
+    const rect = button.getBoundingClientRect();
+
+    // Approximate height of the four menu actions.
+    const menuHeight = 180;
+    const menuGap = 8;
+
+    let top = rect.bottom + menuGap;
+
+    // Open upwards when there isn't enough room below the button.
+    if (top + menuHeight > window.innerHeight - 8) {
+      top = rect.top - menuHeight - menuGap;
+    }
+
+    // Keep the dropdown inside the visible viewport.
+    top = Math.max(8, Math.min(top, window.innerHeight - menuHeight - 8));
+
+    const right = Math.max(8, window.innerWidth - rect.right);
+
+    setPosition({ top, right });
+    setOpen(true);
+  }
+
+  function closeMenu() {
+    setOpen(false);
+  }
+
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
         aria-label={`Actions for ${fee.location}`}
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="menu"
+        onClick={toggleMenu}
         className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-muted)] transition hover:bg-[var(--color-stone)] hover:text-[var(--color-ink)]"
       >
         <FiMoreHorizontal size={20} />
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <>
-            <button
-              type="button"
-              aria-label="Close actions menu"
-              className="fixed inset-0 z-20 cursor-default"
-              onClick={() => setOpen(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, y: 5, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 5, scale: 0.98 }}
-              className="absolute right-0 top-10 z-30 w-48 rounded-xl border border-[var(--color-border)] bg-[var(--color-white)] p-1.5 shadow-[var(--shadow-dropdown)]"
-            >
-              {actions.map((item) => {
-                const Icon = item.icon;
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {open && (
+              <>
+                {/* Click outside to close */}
+                <button
+                  type="button"
+                  aria-label="Close actions menu"
+                  className="fixed inset-0 z-[9998] cursor-default"
+                  onClick={closeMenu}
+                />
 
-                return (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={() => {
-                      setOpen(false);
-                      item.action();
-                    }}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition hover:bg-[var(--color-surface-muted)] ${
-                      item.danger
-                        ? "text-[var(--color-error)]"
-                        : "text-[var(--color-ink)]"
-                    }`}
-                  >
-                    <Icon size={16} />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </motion.div>
-          </>
+                {/* Floating dropdown rendered outside the table */}
+                <motion.div
+                  role="menu"
+                  initial={{ opacity: 0, y: -5, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -5, scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
+                  style={{
+                    position: "fixed",
+                    top: position.top,
+                    right: position.right,
+                  }}
+                  className="z-[9999] w-48 rounded-xl border border-[var(--color-border)] bg-[var(--color-white)] p-1.5 shadow-[var(--shadow-dropdown)]"
+                >
+                  {actions.map((item) => {
+                    const Icon = item.icon;
+
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          closeMenu();
+                          item.action();
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition hover:bg-[var(--color-surface-muted)] ${
+                          item.danger
+                            ? "text-[var(--color-error)]"
+                            : "text-[var(--color-ink)]"
+                        }`}
+                      >
+                        <Icon size={16} />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body,
         )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -141,10 +199,12 @@ function DeliveryFeeCard({
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
             <FiMapPin size={18} />
           </span>
+
           <div className="min-w-0">
             <h3 className="truncate text-sm font-bold text-[var(--color-ink)]">
               {fee.location}
             </h3>
+
             <p className="mt-0.5 text-xs text-[var(--color-muted)]">
               {fee.state}, {fee.country}
             </p>
@@ -163,14 +223,17 @@ function DeliveryFeeCard({
       <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--color-border)] pt-3">
         <div>
           <p className="text-xs text-[var(--color-muted)]">Delivery fee</p>
+
           <p className="mt-1 text-sm font-extrabold text-[var(--color-ink)]">
             {formatDeliveryCurrency(fee.fee)}
           </p>
         </div>
+
         <div>
           <p className="text-xs text-[var(--color-muted)]">
             Estimated delivery
           </p>
+
           <p className="mt-1 text-sm font-semibold text-[var(--color-ink)]">
             {fee.estimatedDelivery}
           </p>
@@ -211,9 +274,11 @@ export default function DeliveryFeesTable({
         <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
           <FiMapPin size={22} />
         </span>
+
         <h3 className="mt-4 font-heading text-base font-bold text-[var(--color-ink)]">
           No delivery locations found
         </h3>
+
         <p className="mt-1 text-sm text-[var(--color-muted)]">
           Try changing your search or filters.
         </p>
@@ -236,6 +301,7 @@ export default function DeliveryFeesTable({
               <th className="px-4 py-4 text-right">Actions</th>
             </tr>
           </thead>
+
           <tbody>
             {fees.map((fee) => (
               <tr
@@ -245,18 +311,23 @@ export default function DeliveryFeesTable({
                 <td className="px-5 py-4 text-sm font-bold text-[var(--color-ink)]">
                   {fee.location}
                 </td>
+
                 <td className="px-4 py-4 text-sm text-[var(--color-ink)]">
                   {fee.state}
                 </td>
+
                 <td className="px-4 py-4 text-sm font-bold text-[var(--color-ink)]">
                   {formatDeliveryCurrency(fee.fee)}
                 </td>
+
                 <td className="px-4 py-4 text-sm text-[var(--color-ink)]">
                   {fee.estimatedDelivery}
                 </td>
+
                 <td className="px-4 py-4">
                   <DeliveryStatusBadge status={fee.status} />
                 </td>
+
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end">
                     <DeliveryFeeActions

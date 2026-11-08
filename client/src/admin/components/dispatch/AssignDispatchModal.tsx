@@ -5,14 +5,14 @@ import { FiTruck, FiX } from "react-icons/fi";
 
 import type {
   AssignDispatchInput,
-  DispatchOrder,
+  EligibleDispatchOrder,
   DeliveryPartner,
 } from "../../types/dispatch.types";
 
 type Props = {
   open: boolean;
-  orders: DispatchOrder[];
-  selectedOrder?: DispatchOrder | null;
+  orders: EligibleDispatchOrder[];
+  selectedOrder?: EligibleDispatchOrder | null;
   saving: boolean;
   onClose: () => void;
   onSubmit: (input: AssignDispatchInput) => Promise<void>;
@@ -40,6 +40,10 @@ export default function AssignDispatchModal({
   const [estimatedDelivery, setEstimatedDelivery] = useState("");
   const [error, setError] = useState("");
 
+  // ============================================
+  // RESET AND INITIALIZE FORM
+  // ============================================
+
   useEffect(() => {
     if (!open) {
       setOrderId("");
@@ -53,16 +57,29 @@ export default function AssignDispatchModal({
     setOrderId(selectedOrder?.id ?? orders[0]?.id ?? "");
   }, [open, selectedOrder, orders]);
 
+  // ============================================
+  // CLOSE MODAL WITH ESCAPE KEY
+  // ============================================
+
   useEffect(() => {
     if (!open) return;
 
     function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !saving) onClose();
+      if (event.key === "Escape" && !saving) {
+        onClose();
+      }
     }
 
     document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+    };
   }, [open, saving, onClose]);
+
+  // ============================================
+  // SUBMIT FORM
+  // ============================================
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -108,7 +125,9 @@ export default function AssignDispatchModal({
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-[var(--color-ink)]/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !saving) onClose();
+            if (event.target === event.currentTarget && !saving) {
+              onClose();
+            }
           }}
         >
           <motion.div
@@ -120,11 +139,13 @@ export default function AssignDispatchModal({
             aria-labelledby="assign-dispatch-title"
             className="w-full max-w-lg overflow-hidden rounded-t-[24px] bg-white shadow-[var(--shadow-dropdown)] sm:rounded-[var(--radius-card)]"
           >
+            {/* HEADER */}
             <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
                   <FiTruck size={19} />
                 </span>
+
                 <div>
                   <h2
                     id="assign-dispatch-title"
@@ -132,6 +153,7 @@ export default function AssignDispatchModal({
                   >
                     Assign Dispatch
                   </h2>
+
                   <p className="mt-0.5 text-xs text-[var(--color-muted)]">
                     Assign an order to a delivery partner.
                   </p>
@@ -143,41 +165,58 @@ export default function AssignDispatchModal({
                 onClick={onClose}
                 disabled={saving}
                 aria-label="Close modal"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-muted)]"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-50"
               >
                 <FiX size={18} />
               </button>
             </div>
 
+            {/* FORM */}
             <form onSubmit={(event) => void handleSubmit(event)}>
               <div className="space-y-4 p-5">
+                {/* ELIGIBLE ORDER */}
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-semibold">
                     Order
                   </span>
+
                   <select
                     value={orderId}
                     onChange={(event) => setOrderId(event.target.value)}
-                    disabled={Boolean(selectedOrder)}
+                    disabled={Boolean(selectedOrder) || saving}
+                    required
                     className="h-11 w-full rounded-[var(--radius-control)] border border-[var(--color-border-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent)] disabled:bg-[var(--color-surface-muted)]"
                   >
+                    <option value="" disabled>
+                      Select an eligible order
+                    </option>
+
                     {orders.map((order) => (
                       <option key={order.id} value={order.id}>
                         {order.orderNumber} — {order.customer.fullName}
                       </option>
                     ))}
                   </select>
+
+                  {orders.length === 0 && (
+                    <span className="mt-1.5 block text-xs text-[var(--color-muted)]">
+                      No eligible paid orders are currently available.
+                    </span>
+                  )}
                 </label>
 
+                {/* DELIVERY PARTNER */}
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-semibold">
                     Delivery partner
                   </span>
+
                   <select
                     value={partner}
                     onChange={(event) =>
                       setPartner(event.target.value as DeliveryPartner)
                     }
+                    disabled={saving}
                     className="h-11 w-full rounded-[var(--radius-control)] border border-[var(--color-border-strong)] bg-white px-3 text-sm outline-none focus:border-[var(--color-accent)]"
                   >
                     {partners.map((item) => (
@@ -188,22 +227,30 @@ export default function AssignDispatchModal({
                   </select>
                 </label>
 
+                {/* TRACKING NUMBER */}
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-semibold">
                     Tracking number
                   </span>
+
                   <input
+                    type="text"
                     value={trackingNumber}
                     onChange={(event) => setTrackingNumber(event.target.value)}
                     placeholder="e.g. GGL7932456"
-                    className="h-11 w-full rounded-[var(--radius-control)] border border-[var(--color-border-strong)] px-3 text-sm outline-none focus:border-[var(--color-accent)]"
+                    maxLength={100}
+                    disabled={saving}
+                    required
+                    className="h-11 w-full rounded-[var(--radius-control)] border border-[var(--color-border-strong)] px-3 text-sm outline-none focus:border-[var(--color-accent)] disabled:opacity-60"
                   />
                 </label>
 
+                {/* ESTIMATED DELIVERY */}
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-semibold">
                     Estimated delivery date
                   </span>
+
                   <input
                     type="date"
                     min={new Date().toISOString().slice(0, 10)}
@@ -211,10 +258,13 @@ export default function AssignDispatchModal({
                     onChange={(event) =>
                       setEstimatedDelivery(event.target.value)
                     }
-                    className="h-11 w-full rounded-[var(--radius-control)] border border-[var(--color-border-strong)] px-3 text-sm outline-none focus:border-[var(--color-accent)]"
+                    disabled={saving}
+                    required
+                    className="h-11 w-full rounded-[var(--radius-control)] border border-[var(--color-border-strong)] px-3 text-sm outline-none focus:border-[var(--color-accent)] disabled:opacity-60"
                   />
                 </label>
 
+                {/* ERROR MESSAGE */}
                 {error && (
                   <p
                     role="alert"
@@ -225,15 +275,17 @@ export default function AssignDispatchModal({
                 )}
               </div>
 
+              {/* FOOTER */}
               <div className="flex flex-col-reverse gap-2 border-t border-[var(--color-border)] bg-[var(--color-paper)] px-5 py-4 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={onClose}
                   disabled={saving}
-                  className="h-11 rounded-[var(--radius-control)] border border-[var(--color-border-strong)] px-5 text-xs font-bold text-[var(--color-ink)]"
+                  className="h-11 rounded-[var(--radius-control)] border border-[var(--color-border-strong)] px-5 text-xs font-bold text-[var(--color-ink)] disabled:opacity-50"
                 >
                   Cancel
                 </button>
+
                 <button
                   type="submit"
                   disabled={saving || orders.length === 0}

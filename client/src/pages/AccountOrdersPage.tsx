@@ -14,7 +14,12 @@ import AccountLayout from "../components/account/AccountLayout";
 import AccountMobileMenu from "../components/account/AccountMobileMenu";
 import RecentOrderCard from "../components/account/RecentOrderCard";
 
-import { ApiError, getCustomerOrders, type OrderApiRecord } from "../lib/api";
+import {
+  ApiError,
+  getCustomerOrders,
+  type OrderApiRecord,
+  type OrderFulfilmentStatus,
+} from "../lib/api";
 
 import type {
   CustomerOrder,
@@ -62,22 +67,74 @@ function formatOrderDate(date: string): string {
 }
 
 // ============================================
-// STATUS MAPPING
+// FULFILMENT STATUS MAPPING
 // ============================================
 
-function mapOrderStatus(status: OrderApiRecord["status"]): OrderStatus {
+function mapFulfilmentStatus(
+  status: OrderFulfilmentStatus | undefined,
+  orderStatus: OrderApiRecord["status"],
+): OrderStatus {
+  // Use the actual fulfilment lifecycle whenever available.
   switch (status) {
-    case "fulfilled":
+    case "pending_dispatch":
+    case "processing":
+      return "Processing";
+
+    case "dispatched":
+    case "in_transit":
+      return "Shipped";
+
+    case "delivered":
       return "Delivered";
 
     case "cancelled":
-    case "expired":
       return "Cancelled";
 
-    case "confirmed":
-    case "pending":
     default:
+      // Compatibility for older orders and unpaid orders
+      // that do not yet have a fulfilment status.
+      switch (orderStatus) {
+        case "fulfilled":
+          return "Delivered";
+
+        case "cancelled":
+        case "expired":
+          return "Cancelled";
+
+        case "confirmed":
+        case "pending":
+        default:
+          return "Processing";
+      }
+  }
+}
+
+// ============================================
+// FULFILMENT EVENT LABELS
+// ============================================
+
+function getFulfilmentEventLabel(status: OrderFulfilmentStatus): string {
+  switch (status) {
+    case "pending_dispatch":
+      return "Pending dispatch";
+
+    case "processing":
       return "Processing";
+
+    case "dispatched":
+      return "Dispatched";
+
+    case "in_transit":
+      return "In transit";
+
+    case "delivered":
+      return "Delivered";
+
+    case "cancelled":
+      return "Cancelled";
+
+    default:
+      return "Order update";
   }
 }
 
@@ -142,69 +199,34 @@ function mapDeliveryMethod(method: OrderApiRecord["deliveryMethod"]): string {
 }
 
 // ============================================
-// ORDER TIMELINE
+// REAL ORDER TIMELINE
 // ============================================
 
 function createOrderTimeline(order: OrderApiRecord): CustomerOrder["timeline"] {
-  const placedDate = formatOrderDate(order.createdAt);
-
-  if (order.status === "cancelled" || order.status === "expired") {
-    return [
-      {
-        label: "Order placed",
-        description: "Your order was received.",
-        date: placedDate,
-        completed: true,
-      },
-      {
-        label: "Cancelled",
-        description:
-          order.status === "expired"
-            ? "The order reservation expired before payment was completed."
-            : "This order was cancelled.",
-        date: formatOrderDate(order.updatedAt),
-        completed: true,
-      },
-    ];
-  }
-
-  return [
+  const timeline: CustomerOrder["timeline"] = [
     {
       label: "Order placed",
-      description: "Your order was successfully received.",
-      date: placedDate,
+      description: "Your order was received.",
+      date: formatOrderDate(order.createdAt),
       completed: true,
     },
-    {
-      label: "Processing",
-      description:
-        order.status === "confirmed" || order.status === "fulfilled"
-          ? "Your order has been confirmed."
-          : "Your order is awaiting confirmation.",
-      date:
-        order.status === "confirmed" || order.status === "fulfilled"
-          ? formatOrderDate(order.updatedAt)
-          : undefined,
-      completed: order.status === "confirmed" || order.status === "fulfilled",
-    },
-    {
-      label: "Shipped",
-      description: "Awaiting dispatch information.",
-      completed: false,
-    },
-    {
-      label: "Delivered",
-      description:
-        order.status === "fulfilled"
-          ? "Your order has been fulfilled."
-          : "Awaiting delivery.",
-      date:
-        order.status === "fulfilled"
-          ? formatOrderDate(order.updatedAt)
-          : undefined,
-      completed: order.status === "fulfilled",
-    },
   ];
+
+  // Only append fulfilment events actually saved by the backend.
+  const events = [...(order.fulfilmentEvents ?? [])].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  );
+
+  for (const event of events) {
+    timeline.push({
+      label: getFulfilmentEventLabel(event.status),
+      description: event.note || getFulfilmentEventLabel(event.status),
+      date: formatOrderDate(event.createdAt),
+      completed: true,
+    });
+  }
+
+  return timeline;
 }
 
 // ============================================
@@ -212,6 +234,8 @@ function createOrderTimeline(order: OrderApiRecord): CustomerOrder["timeline"] {
 // ============================================
 
 function mapOrderToCustomerOrder(order: OrderApiRecord): CustomerOrder {
+  const dispatch = order.dispatch;
+
   return {
     id: order._id,
 
@@ -219,7 +243,9 @@ function mapOrderToCustomerOrder(order: OrderApiRecord): CustomerOrder {
 
     date: formatOrderDate(order.createdAt),
 
-    status: mapOrderStatus(order.status),
+    // The customer-facing status comes from fulfilment,
+    // not the independent general order lifecycle.
+    status: mapFulfilmentStatus(order.fulfilmentStatus, order.status),
 
     items: order.items.map((item) => ({
       id: item.productId,
@@ -247,14 +273,19 @@ function mapOrderToCustomerOrder(order: OrderApiRecord): CustomerOrder {
 
     deliveryMethod: mapDeliveryMethod(order.deliveryMethod),
 
-    estimatedDelivery: "Pending confirmation",
+    // Use the actual estimated delivery from Dispatch.
+    estimatedDelivery: dispatch?.estimatedDelivery
+      ? formatOrderDate(dispatch.estimatedDelivery)
+      : "Pending confirmation",
 
-    trackingNumber: "",
+    // Use the actual tracking number from Dispatch.
+    trackingNumber: dispatch?.trackingNumber ?? "",
 
     paymentMethod: "Paystack",
 
     paymentStatus: mapPaymentStatus(order.paymentStatus),
 
+    // Only actual persisted fulfilment events are displayed.
     timeline: createOrderTimeline(order),
   };
 }
@@ -329,7 +360,7 @@ export default function AccountOrdersPage() {
       }
     }
 
-    loadOrders();
+    void loadOrders();
 
     return () => {
       isMounted = false;

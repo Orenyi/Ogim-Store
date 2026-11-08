@@ -1,17 +1,24 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+
 import { env } from "./config/env.js";
 import { connectDatabase } from "./config/database.js";
+
 import productRoutes from "./routes/product.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import { getBrands } from "./controllers/product.controller.js";
 import cartRoutes from "./routes/cart.routes.js";
 import orderRoutes from "./routes/order.routes.js";
+
 import { startOrderExpirationWorker } from "./workers/order-expiration.worker.js";
+
 import paystackWebhookRoutes from "./routes/paystack-webhook.routes.js";
 import adminCustomerRoutes from "./routes/admin-customer.routes.js";
 import adminOrderRoutes from "./routes/admin-order.routes.js";
+import adminDeliveryRoutes from "./routes/admin-delivery.routes.js";
+import adminDispatchRoutes from "./routes/admin-dispatch.routes.js";
+import adminTrackingRoutes from "./routes/admin-tracking.routes.js";
 
 const app = express();
 
@@ -39,15 +46,29 @@ app.get("/api/v1/health", (_req, res) => {
   });
 });
 
+// ============================================
+// CUSTOMER ROUTES
+// ============================================
+
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/products", productRoutes);
 app.get("/api/v1/brands", getBrands);
 app.use("/api/v1/cart", cartRoutes);
 app.use("/api/v1/orders", orderRoutes);
 
-// Admin routes
+// ============================================
+// ADMIN ROUTES
+// ============================================
+
 app.use("/api/v1/admin/customers", adminCustomerRoutes);
 app.use("/api/v1/admin/orders", adminOrderRoutes);
+app.use("/api/v1/admin/delivery", adminDeliveryRoutes);
+app.use("/api/v1/admin/dispatch", adminDispatchRoutes);
+app.use("/api/v1/admin/tracking", adminTrackingRoutes);
+
+// ============================================
+// START SERVER
+// ============================================
 
 async function startServer(): Promise<void> {
   try {

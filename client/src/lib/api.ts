@@ -150,6 +150,49 @@ export type OrderStatus =
 
 export type OrderPaymentStatus = "pending" | "paid" | "failed" | "refunded";
 
+// ============================================
+// ORDER FULFILMENT / TRACKING TYPES
+// ============================================
+
+export type OrderFulfilmentStatus =
+  | "pending_dispatch"
+  | "processing"
+  | "dispatched"
+  | "in_transit"
+  | "delivered"
+  | "cancelled";
+
+/**
+ * A customer-visible fulfilment event persisted on the Order.
+ *
+ * Admin IDs are intentionally excluded from this interface.
+ */
+export interface CustomerFulfilmentEvent {
+  id: string;
+  status: OrderFulfilmentStatus;
+  note: string;
+  createdAt: string;
+}
+
+/**
+ * Customer-safe delivery information from the Dispatch document.
+ *
+ * Internal dispatch history, assignedBy and admin IDs
+ * are intentionally excluded.
+ */
+export interface CustomerDispatchInfo {
+  deliveryPartner: string | null;
+  trackingNumber: string | null;
+  status: "pending" | "dispatched" | "in_transit" | "delivered";
+  estimatedDelivery: string | null;
+  dispatchedAt: string | null;
+  deliveredAt: string | null;
+}
+
+// ============================================
+// ORDER REQUEST TYPES
+// ============================================
+
 export interface CreateOrderItemPayload {
   productId: string;
   quantity: number;
@@ -170,6 +213,10 @@ export interface CreateOrderPayload {
   deliveryAddress: OrderDeliveryAddressPayload;
   deliveryMethod: OrderDeliveryMethod;
 }
+
+// ============================================
+// ORDER RESPONSE TYPES
+// ============================================
 
 export interface OrderApiItem {
   productId: string;
@@ -195,12 +242,30 @@ export interface OrderApiRecord {
   deliveryFee: number;
   total: number;
   currency: "NGN";
+
+  // General order lifecycle.
   status: OrderStatus;
+
+  // Payment lifecycle.
   paymentStatus: OrderPaymentStatus;
   paidPaymentId: string | null;
   paymentReference: string | null;
+
+  // Fulfilment lifecycle.
+  // Optional because older and unpaid orders may not have this field.
+  fulfilmentStatus?: OrderFulfilmentStatus;
+
+  // Actual customer-visible tracking events.
+  fulfilmentEvents: CustomerFulfilmentEvent[];
+
+  // Associated delivery record.
+  // Null when dispatch has not yet been assigned.
+  dispatch: CustomerDispatchInfo | null;
+
+  // Stock reservation.
   reservationExpiresAt: string;
   stockRestoredAt: string | null;
+
   createdAt: string;
   updatedAt: string;
 }
@@ -622,6 +687,9 @@ export async function mergeGuestCart(
 
 /**
  * Fetch all orders belonging to the authenticated customer.
+ *
+ * Each order includes persisted fulfilment events and
+ * customer-safe dispatch information.
  */
 export async function getCustomerOrders(): Promise<CustomerOrdersResponse> {
   return apiRequest<CustomerOrdersResponse>("/orders");
@@ -629,6 +697,9 @@ export async function getCustomerOrders(): Promise<CustomerOrdersResponse> {
 
 /**
  * Fetch one order belonging to the authenticated customer.
+ *
+ * The response includes its persisted tracking timeline
+ * and associated dispatch information.
  */
 export async function getCustomerOrderById(
   orderId: string,
