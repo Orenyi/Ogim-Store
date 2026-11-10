@@ -42,7 +42,7 @@ export const registerSchema = z
     phoneNumber: z
       .string()
       .trim()
-      .max(10)
+      .max(20)
       .optional()
       .transform((value) => {
         if (!value) return undefined;
@@ -72,7 +72,7 @@ export const googleLoginSchema = z
     phoneNumber: z
       .string()
       .trim()
-      .max(10)
+      .max(20)
       .optional()
       .transform((value) => {
         if (!value) return undefined;

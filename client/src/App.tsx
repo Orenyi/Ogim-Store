@@ -44,6 +44,7 @@ import TrackingManagementPage from "./pages/TrackingManagementPage";
 import StaffPermissionsPage from "./pages/StaffPermissionsPage";
 import RevenueReportsPage from "./pages/RevenueReportsPage";
 import CustomersPage from "./pages/CustomersPage";
+import AdminAcceptInvitationPage from "./pages/AdminAcceptInvitationPage";
 
 export default function App() {
   return (
@@ -115,6 +116,10 @@ export default function App() {
           <Route path="revenue" element={<RevenueReportsPage />} />
           <Route path="customers" element={<CustomersPage />} />
         </Route>
+        <Route
+          path="/admin/accept-invitation"
+          element={<AdminAcceptInvitationPage />}
+        />
 
         <Route path="/admin/login" element={<AdminLoginPage />} />
       </Routes>

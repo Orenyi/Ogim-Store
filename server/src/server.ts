@@ -19,6 +19,9 @@ import adminOrderRoutes from "./routes/admin-order.routes.js";
 import adminDeliveryRoutes from "./routes/admin-delivery.routes.js";
 import adminDispatchRoutes from "./routes/admin-dispatch.routes.js";
 import adminTrackingRoutes from "./routes/admin-tracking.routes.js";
+import adminRoleRoutes from "./routes/adminRole.routes.js";
+import adminStaffRoutes from "./routes/adminStaff.routes.js";
+import adminInvitationAcceptanceRoutes from "./routes/adminInvitationAcceptance.routes.js";
 
 const app = express();
 
@@ -65,6 +68,12 @@ app.use("/api/v1/admin/orders", adminOrderRoutes);
 app.use("/api/v1/admin/delivery", adminDeliveryRoutes);
 app.use("/api/v1/admin/dispatch", adminDispatchRoutes);
 app.use("/api/v1/admin/tracking", adminTrackingRoutes);
+app.use("/api/v1/admin/roles", adminRoleRoutes);
+app.use("/api/v1/admin/staff", adminStaffRoutes);
+
+// Public invitation acceptance routes.
+// These routes have their own trusted-origin, CSRF and rate-limit protection.
+app.use("/api/v1/admin/invitations", adminInvitationAcceptanceRoutes);
 
 // ============================================
 // START SERVER

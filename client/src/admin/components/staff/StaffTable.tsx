@@ -64,8 +64,9 @@ function StaffActions({
         type="button"
         aria-label={`Actions for ${staff.fullName}`}
         aria-expanded={open}
+        aria-haspopup="menu"
         onClick={() => setOpen((value) => !value)}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-stone)] hover:text-[var(--color-ink)]"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-muted)] transition-colors hover:bg-[var(--color-stone)] hover:text-[var(--color-ink)]"
       >
         <FiMoreHorizontal size={20} />
       </button>
@@ -79,40 +80,46 @@ function StaffActions({
               className="fixed inset-0 z-20 cursor-default"
               onClick={() => setOpen(false)}
             />
+
             <motion.div
+              role="menu"
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 5 }}
+              transition={{ duration: 0.15 }}
               className="absolute right-0 top-10 z-30 w-48 rounded-xl border border-[var(--color-border)] bg-[var(--color-white)] p-1.5 shadow-[var(--shadow-dropdown)]"
             >
               <button
                 type="button"
+                role="menuitem"
                 onClick={() => {
                   setOpen(false);
                   onEdit();
                 }}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)]"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-muted)]"
               >
                 <FiEdit2 size={16} />
-                Edit Staff
+                Edit Staff Role
               </button>
 
               <button
                 type="button"
+                role="menuitem"
                 onClick={() => {
                   setOpen(false);
                   onStatusChange();
                 }}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)]"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-muted)]"
               >
                 {active ? <FiUserX size={16} /> : <FiUserCheck size={16} />}
-                {active ? "Deactivate" : "Activate"}
+                {active ? "Deactivate Staff" : "Activate Staff"}
               </button>
 
               <a
                 href={`mailto:${staff.email}`}
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-surface-muted)]"
+                role="menuitem"
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-muted)]"
               >
                 <FiMail size={16} />
                 Send Email
@@ -126,9 +133,19 @@ function StaffActions({
 }
 
 function StaffAvatar({ staff }: { staff: AdminStaff }) {
+  const initials =
+    staff.initials ||
+    staff.fullName
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part.charAt(0))
+      .join("")
+      .toUpperCase();
+
   return (
     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-xs font-bold text-[var(--color-ink)]">
-      {staff.initials}
+      {initials || "ST"}
     </span>
   );
 }
@@ -142,7 +159,9 @@ function StaffRoleBadge({ role }: { role?: StaffRole }) {
 
   return (
     <span
-      className={`inline-flex whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${roleColors[role.color]}`}
+      className={`inline-flex whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${
+        roleColors[role.color]
+      }`}
     >
       {role.name}
     </span>
@@ -150,11 +169,12 @@ function StaffRoleBadge({ role }: { role?: StaffRole }) {
 }
 
 function formatLastLogin(value: string | null) {
-  if (!value) return "Never logged in";
+  // The current staff API does not provide last-login information.
+  if (!value) return "Not available";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "Not available";
 
   return new Intl.DateTimeFormat("en-NG", {
     day: "numeric",
@@ -193,9 +213,11 @@ export default function StaffTable({
         <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
           <FiMail size={21} />
         </span>
+
         <h3 className="mt-3 font-heading font-bold text-[var(--color-ink)]">
           No staff members found
         </h3>
+
         <p className="mt-1 text-sm text-[var(--color-muted)]">
           Try adjusting your search or filters.
         </p>
@@ -205,12 +227,13 @@ export default function StaffTable({
 
   return (
     <>
+      {/* Desktop staff table */}
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[850px] text-left">
           <thead>
             <tr className="border-b border-[var(--color-border)] text-xs font-semibold text-[var(--color-muted)]">
               <th className="w-12 px-5 py-4">
-                <span className="sr-only">Staff</span>
+                <span className="sr-only">Staff avatar</span>
               </th>
               <th className="px-4 py-4">Staff</th>
               <th className="px-4 py-4">Role</th>
@@ -230,26 +253,33 @@ export default function StaffTable({
                 <td className="px-5 py-3.5">
                   <StaffAvatar staff={member} />
                 </td>
+
                 <td className="px-4 py-3.5">
                   <p className="text-sm font-bold text-[var(--color-ink)]">
                     {member.fullName}
                   </p>
+
                   <p className="mt-0.5 text-xs text-[var(--color-muted)]">
-                    {member.phoneNumber}
+                    {member.phoneNumber || "No phone number"}
                   </p>
                 </td>
+
                 <td className="px-4 py-3.5">
                   <StaffRoleBadge role={roleMap.get(member.roleId)} />
                 </td>
+
                 <td className="px-4 py-3.5 text-sm text-[var(--color-ink)]">
                   {member.email}
                 </td>
+
                 <td className="px-4 py-3.5 text-xs text-[var(--color-muted)]">
                   {formatLastLogin(member.lastLoginAt)}
                 </td>
+
                 <td className="px-4 py-3.5">
                   <StaffStatus status={member.status} />
                 </td>
+
                 <td className="px-4 py-3.5 text-right">
                   <div className="flex justify-end">
                     <StaffActions
@@ -265,6 +295,7 @@ export default function StaffTable({
         </table>
       </div>
 
+      {/* Mobile staff cards */}
       <div className="grid gap-3 p-3 md:hidden">
         {staff.map((member) => (
           <article
@@ -280,10 +311,12 @@ export default function StaffTable({
                     <p className="truncate text-sm font-bold text-[var(--color-ink)]">
                       {member.fullName}
                     </p>
+
                     <p className="mt-0.5 break-all text-xs text-[var(--color-muted)]">
                       {member.email}
                     </p>
                   </div>
+
                   <StaffActions
                     staff={member}
                     onEdit={() => onEdit(member)}
@@ -296,9 +329,15 @@ export default function StaffTable({
                   <StaffStatus status={member.status} />
                 </div>
 
-                <p className="mt-2 text-xs text-[var(--color-muted)]">
-                  Last login: {formatLastLogin(member.lastLoginAt)}
-                </p>
+                <div className="mt-3 space-y-1">
+                  <p className="text-xs text-[var(--color-muted)]">
+                    Phone: {member.phoneNumber || "Not provided"}
+                  </p>
+
+                  <p className="text-xs text-[var(--color-muted)]">
+                    Last login: {formatLastLogin(member.lastLoginAt)}
+                  </p>
+                </div>
               </div>
             </div>
           </article>

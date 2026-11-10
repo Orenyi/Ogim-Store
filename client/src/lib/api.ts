@@ -52,6 +52,57 @@ export interface AdminAuthResponse {
 }
 
 // ============================================
+// ADMIN INVITATION ACCEPTANCE TYPES
+// ============================================
+
+export interface AdminInvitationRole {
+  name: string;
+  description: string;
+  color: "orange" | "blue" | "purple" | "green" | "yellow";
+}
+
+export interface AdminInvitationDetails {
+  fullName: string;
+  email: string;
+  phoneNumber?: string;
+  role: AdminInvitationRole;
+  expiresAt: string;
+}
+
+export interface ValidateAdminInvitationPayload {
+  token: string;
+}
+
+export interface ValidateAdminInvitationResponse {
+  success: boolean;
+  message: string;
+  data: AdminInvitationDetails;
+}
+
+export interface AcceptAdminInvitationPayload {
+  token: string;
+  password: string;
+  acceptedTerms: true;
+}
+
+export interface AcceptedAdminUser {
+  id: string;
+  fullName: string;
+  email: string;
+  role: "admin";
+  adminType: "staff";
+  adminRoleId: string;
+}
+
+export interface AcceptAdminInvitationResponse {
+  success: boolean;
+  message: string;
+  data: {
+    user: AcceptedAdminUser;
+  };
+}
+
+// ============================================
 // CART API TYPES
 // ============================================
 
@@ -162,11 +213,6 @@ export type OrderFulfilmentStatus =
   | "delivered"
   | "cancelled";
 
-/**
- * A customer-visible fulfilment event persisted on the Order.
- *
- * Admin IDs are intentionally excluded from this interface.
- */
 export interface CustomerFulfilmentEvent {
   id: string;
   status: OrderFulfilmentStatus;
@@ -174,12 +220,6 @@ export interface CustomerFulfilmentEvent {
   createdAt: string;
 }
 
-/**
- * Customer-safe delivery information from the Dispatch document.
- *
- * Internal dispatch history, assignedBy and admin IDs
- * are intentionally excluded.
- */
 export interface CustomerDispatchInfo {
   deliveryPartner: string | null;
   trackingNumber: string | null;
@@ -243,26 +283,15 @@ export interface OrderApiRecord {
   total: number;
   currency: "NGN";
 
-  // General order lifecycle.
   status: OrderStatus;
-
-  // Payment lifecycle.
   paymentStatus: OrderPaymentStatus;
   paidPaymentId: string | null;
   paymentReference: string | null;
 
-  // Fulfilment lifecycle.
-  // Optional because older and unpaid orders may not have this field.
   fulfilmentStatus?: OrderFulfilmentStatus;
-
-  // Actual customer-visible tracking events.
   fulfilmentEvents: CustomerFulfilmentEvent[];
-
-  // Associated delivery record.
-  // Null when dispatch has not yet been assigned.
   dispatch: CustomerDispatchInfo | null;
 
-  // Stock reservation.
   reservationExpiresAt: string;
   stockRestoredAt: string | null;
 
@@ -409,11 +438,10 @@ export function clearCsrfToken(): void {
   csrfToken = null;
 }
 
-/**
- * Refresh the access token using the HTTP-only refresh cookie.
- *
- * The refresh endpoint requires a valid CSRF cookie/header pair.
- */
+// ============================================
+// ACCESS TOKEN REFRESH
+// ============================================
+
 async function refreshAccessSession(): Promise<boolean> {
   try {
     const token = await getCsrfToken();
@@ -440,13 +468,10 @@ async function refreshAccessSession(): Promise<boolean> {
   }
 }
 
-/**
- * Base API request.
- *
- * Automatically refreshes an expired access token once and retries
- * the original request. Refresh is skipped for authentication routes
- * to prevent login and refresh loops.
- */
+// ============================================
+// BASE API REQUEST
+// ============================================
+
 export async function apiRequest<T>(
   endpoint: string,
   options?: RequestInit,
@@ -462,6 +487,11 @@ export async function apiRequest<T>(
     "/auth/google",
     "/auth/refresh",
     "/auth/logout",
+
+    // Public administrator invitation acceptance routes.
+    // These must work before the invited user has an account session.
+    "/admin/invitations/validate",
+    "/admin/invitations/accept",
   ];
 
   const canRefresh = !excludedRefreshRoutes.includes(endpoint);
@@ -493,7 +523,6 @@ export async function apiRequest<T>(
 
   let response = await sendRequest();
 
-  // An expired access token may be recovered using the refresh cookie.
   if (response.status === 401 && canRefresh) {
     const refreshed = await refreshAccessSession();
 
@@ -530,12 +559,6 @@ export async function apiRequest<T>(
 // ADMIN AUTHENTICATION
 // ============================================
 
-/**
- * Sign in an administrator.
- *
- * The backend sets HTTP-only access and refresh cookies.
- * No JWT is stored in localStorage.
- */
 export async function adminLogin(
   payload: AdminLoginPayload,
 ): Promise<AdminAuthResponse> {
@@ -545,21 +568,10 @@ export async function adminLogin(
   });
 }
 
-/**
- * Retrieve the currently authenticated admin.
- *
- * The backend verifies the HTTP-only access cookie.
- */
 export async function getAdminSession(): Promise<AdminAuthResponse> {
   return apiRequest<AdminAuthResponse>("/auth/admin/me");
 }
 
-/**
- * Sign out the administrator.
- *
- * The backend revokes the refresh session and clears
- * the authentication cookies.
- */
 export async function adminLogout(): Promise<AuthMessageResponse> {
   try {
     return await apiRequest<AuthMessageResponse>("/auth/logout", {
@@ -568,6 +580,44 @@ export async function adminLogout(): Promise<AuthMessageResponse> {
   } finally {
     clearCsrfToken();
   }
+}
+
+// ============================================
+// ADMIN INVITATION ACCEPTANCE
+// ============================================
+
+/**
+ * Validate an invitation token before showing the acceptance form.
+ *
+ * This endpoint is public. It does not require an authenticated admin.
+ */
+export async function validateAdminInvitation(
+  payload: ValidateAdminInvitationPayload,
+): Promise<ValidateAdminInvitationResponse> {
+  return apiRequest<ValidateAdminInvitationResponse>(
+    "/admin/invitations/validate",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+/**
+ * Accept an administrator invitation and create the staff account.
+ *
+ * The backend validates the token, password and acceptance terms.
+ */
+export async function acceptAdminInvitation(
+  payload: AcceptAdminInvitationPayload,
+): Promise<AcceptAdminInvitationResponse> {
+  return apiRequest<AcceptAdminInvitationResponse>(
+    "/admin/invitations/accept",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 // ============================================
@@ -592,11 +642,6 @@ export async function resetPassword(
   });
 }
 
-/**
- * Delete the authenticated customer's account.
- *
- * The backend performs a transactional soft deletion.
- */
 export async function deleteCustomerAccount(): Promise<AuthMessageResponse> {
   const response = await apiRequest<AuthMessageResponse>("/auth/account", {
     method: "DELETE",
@@ -611,16 +656,10 @@ export async function deleteCustomerAccount(): Promise<AuthMessageResponse> {
 // CUSTOMER CART API
 // ============================================
 
-/**
- * Fetch the authenticated customer's cart.
- */
 export async function getCart(): Promise<CartApiResponse> {
   return apiRequest<CartApiResponse>("/cart");
 }
 
-/**
- * Add a product to the authenticated customer's cart.
- */
 export async function addCartItem(
   payload: AddCartItemPayload,
 ): Promise<CartApiResponse> {
@@ -630,9 +669,6 @@ export async function addCartItem(
   });
 }
 
-/**
- * Update a product's quantity in the cart.
- */
 export async function updateCartItem(
   productId: string,
   payload: UpdateCartItemPayload,
@@ -646,9 +682,6 @@ export async function updateCartItem(
   );
 }
 
-/**
- * Remove a product from the authenticated customer's cart.
- */
 export async function removeCartItem(
   productId: string,
 ): Promise<CartApiResponse> {
@@ -660,18 +693,12 @@ export async function removeCartItem(
   );
 }
 
-/**
- * Clear the authenticated customer's cart.
- */
 export async function clearCart(): Promise<CartApiResponse> {
   return apiRequest<CartApiResponse>("/cart", {
     method: "DELETE",
   });
 }
 
-/**
- * Merge a guest's locally stored cart into the authenticated customer's cart.
- */
 export async function mergeGuestCart(
   payload: MergeGuestCartPayload,
 ): Promise<MergeGuestCartResponse> {
@@ -685,22 +712,10 @@ export async function mergeGuestCart(
 // CUSTOMER ORDER API
 // ============================================
 
-/**
- * Fetch all orders belonging to the authenticated customer.
- *
- * Each order includes persisted fulfilment events and
- * customer-safe dispatch information.
- */
 export async function getCustomerOrders(): Promise<CustomerOrdersResponse> {
   return apiRequest<CustomerOrdersResponse>("/orders");
 }
 
-/**
- * Fetch one order belonging to the authenticated customer.
- *
- * The response includes its persisted tracking timeline
- * and associated dispatch information.
- */
 export async function getCustomerOrderById(
   orderId: string,
 ): Promise<CustomerOrderResponse> {
@@ -709,9 +724,6 @@ export async function getCustomerOrderById(
   );
 }
 
-/**
- * Create a pending order from the customer's cart.
- */
 export async function createOrder(
   payload: CreateOrderPayload,
 ): Promise<CreateOrderResponse> {
@@ -721,9 +733,6 @@ export async function createOrder(
   });
 }
 
-/**
- * Initialize Paystack payment for an existing pending order.
- */
 export async function initializeOrderPayment(
   orderId: string,
 ): Promise<InitializePaymentResponse> {
@@ -735,9 +744,6 @@ export async function initializeOrderPayment(
   );
 }
 
-/**
- * Verify a Paystack payment and retrieve the complete order.
- */
 export async function verifyOrderPayment(
   orderId: string,
   reference: string,
@@ -751,9 +757,6 @@ export async function verifyOrderPayment(
   );
 }
 
-/**
- * Cancel a pending order.
- */
 export async function cancelOrder(
   orderId: string,
 ): Promise<CancelOrderResponse> {

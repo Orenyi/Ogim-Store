@@ -18,7 +18,7 @@ async function main() {
       to: recipientEmail,
     });
 
-    console.log("Email successfully accepted by Resend!");
+    console.log("Email successfully submitted through Gmail SMTP!");
     console.log("Email ID:", result.id);
   } catch (error) {
     console.error("Failed to send test email:");

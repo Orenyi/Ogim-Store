@@ -9,21 +9,50 @@ import {
 
 import { requireAdmin } from "../middleware/auth.middleware.js";
 
+import { requireAdminPermission } from "../middleware/admin-permission.middleware.js";
+
 const router = Router();
 
-// All dispatch management routes require administrator access.
+// ============================================
+// ADMIN AUTHENTICATION
+// ============================================
+
 router.use(requireAdmin);
 
+// ============================================
+// DISPATCH MANAGEMENT
+// ============================================
+
 // GET /api/v1/admin/dispatch
-router.get("/", getAdminDispatchesController);
+// View dispatch records.
+router.get(
+  "/",
+  requireAdminPermission("dispatch.view"),
+  getAdminDispatchesController,
+);
 
 // GET /api/v1/admin/dispatch/eligible-orders
-router.get("/eligible-orders", getAdminEligibleDispatchOrdersController);
+// View orders eligible for dispatch assignment.
+router.get(
+  "/eligible-orders",
+  requireAdminPermission("dispatch.view"),
+  getAdminEligibleDispatchOrdersController,
+);
 
 // POST /api/v1/admin/dispatch/assign
-router.post("/assign", assignAdminDispatchController);
+// Assign an order to a dispatch rider.
+router.post(
+  "/assign",
+  requireAdminPermission("dispatch.manage"),
+  assignAdminDispatchController,
+);
 
 // PATCH /api/v1/admin/dispatch/:dispatchId/status
-router.patch("/:dispatchId/status", updateAdminDispatchStatusController);
+// Update dispatch status.
+router.patch(
+  "/:dispatchId/status",
+  requireAdminPermission("dispatch.manage"),
+  updateAdminDispatchStatusController,
+);
 
 export default router;

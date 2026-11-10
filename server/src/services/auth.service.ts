@@ -144,7 +144,9 @@ async function sendWelcomeEmailSafely(
       },
     );
 
-    console.log(`Welcome email accepted by Resend for ${email}.`);
+    console.log(
+      `Welcome email sent successfully through Gmail SMTP to ${email}.`,
+    );
   } catch (error) {
     console.error(`Welcome email delivery failed for ${email}:`, error);
   }
@@ -637,7 +639,9 @@ export async function requestPasswordReset(
       resetUrl,
     });
 
-    console.log(`Password reset email accepted for ${user.email}.`);
+    console.log(
+      `Password reset email sent successfully through Gmail SMTP to ${user.email}.`,
+    );
   } catch (error) {
     // Do not leave a usable token when email delivery fails.
     await PasswordResetToken.updateOne(
@@ -793,7 +797,7 @@ export async function resetCustomerPassword(
       });
 
       console.log(
-        `Password changed notification accepted for ${notification.email}.`,
+        `Password changed notification sent successfully through Gmail SMTP to ${notification.email}.`,
       );
     } catch (error) {
       // A notification failure must not undo a successful password reset.

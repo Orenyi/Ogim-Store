@@ -8,18 +8,39 @@ import {
   updateAdminTrackingController,
 } from "../controllers/admin-tracking.controller.js";
 
+import { requireAdminPermission } from "../middleware/admin-permission.middleware.js";
+
 const router = Router();
 
-// All tracking management endpoints require administrator authentication.
+// ============================================
+// ADMIN AUTHENTICATION
+// ============================================
+
 router.use(requireAdmin);
 
+// ============================================
+// ORDER TRACKING MANAGEMENT
+// ============================================
+
 // GET /api/v1/admin/tracking
-router.get("/", getAdminTrackingOrdersController);
+router.get(
+  "/",
+  requireAdminPermission("tracking.manage"),
+  getAdminTrackingOrdersController,
+);
 
 // GET /api/v1/admin/tracking/:orderId
-router.get("/:orderId", getAdminTrackingOrderByIdController);
+router.get(
+  "/:orderId",
+  requireAdminPermission("tracking.manage"),
+  getAdminTrackingOrderByIdController,
+);
 
 // PATCH /api/v1/admin/tracking/:orderId
-router.patch("/:orderId", updateAdminTrackingController);
+router.patch(
+  "/:orderId",
+  requireAdminPermission("tracking.manage"),
+  updateAdminTrackingController,
+);
 
 export default router;
