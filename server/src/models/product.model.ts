@@ -127,6 +127,16 @@ const productSchema = new Schema(
       maxlength: [120, "Model cannot exceed 120 characters"],
     },
 
+    /**
+     * Category assigned to this product.
+     * References a document in the Category collection.
+     */
+    categoryId: {
+      type: Schema.Types.ObjectId,
+      ref: "Category",
+      required: [true, "Product category is required"],
+    },
+
     description: {
       type: String,
       required: [true, "Product description is required"],
@@ -249,6 +259,10 @@ productSchema.index({ status: 1, brand: 1 });
 productSchema.index({ status: 1, condition: 1 });
 productSchema.index({ status: 1, price: 1 });
 productSchema.index({ status: 1, isFeatured: 1, createdAt: -1 });
+
+// Category filtering and category-based inventory reporting.
+productSchema.index({ categoryId: 1 });
+productSchema.index({ status: 1, categoryId: 1 });
 
 /**
  * Reuse the model if it has already been registered.

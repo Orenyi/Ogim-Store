@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FiChevronRight, FiRefreshCw } from "react-icons/fi";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -16,6 +16,10 @@ import type {
   RevenueDateRange,
   RevenueReport,
 } from "../admin/types/revenue.types";
+
+// ============================================
+// INITIAL REPORT STATE
+// ============================================
 
 const initialRange: RevenueDateRange = {
   period: "this-month",
@@ -50,8 +54,14 @@ const emptyReport: RevenueReport = {
   recentOrders: [],
 };
 
+// ============================================
+// PAGE
+// ============================================
+
 export default function RevenueReportsPage() {
   const navigate = useNavigate();
+
+  const requestId = useRef(0);
 
   const [dateRange, setDateRange] = useState<RevenueDateRange>(initialRange);
 
@@ -59,29 +69,60 @@ export default function RevenueReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // ============================================
+  // LOAD REVENUE REPORT
+  // ============================================
+
   const loadReport = useCallback(async () => {
+    const currentRequestId = ++requestId.current;
+
     setLoading(true);
     setError("");
 
     try {
       const result = await getAdminRevenueReport(dateRange);
+
+      // Ignore outdated requests.
+      if (currentRequestId !== requestId.current) {
+        return;
+      }
+
       setReport(result);
     } catch (err) {
+      if (currentRequestId !== requestId.current) {
+        return;
+      }
+
       setError(
         err instanceof Error ? err.message : "Unable to load revenue reports.",
       );
     } finally {
-      setLoading(false);
+      if (currentRequestId === requestId.current) {
+        setLoading(false);
+      }
     }
   }, [dateRange]);
 
+  // ============================================
+  // FETCH WHEN DATE RANGE CHANGES
+  // ============================================
+
   useEffect(() => {
     void loadReport();
+
+    return () => {
+      // Prevent outdated requests from updating this page.
+      requestId.current += 1;
+    };
   }, [loadReport]);
+
+  // ============================================
+  // RENDER
+  // ============================================
 
   return (
     <main className="min-w-0 space-y-5 pb-8">
-      {/* Heading */}
+      {/* PAGE HEADING */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <nav
@@ -90,6 +131,7 @@ export default function RevenueReportsPage() {
           >
             <span>Dashboard</span>
             <FiChevronRight size={14} />
+
             <span className="text-[var(--color-ink)]">
               Revenue &amp; Reports
             </span>
@@ -110,32 +152,36 @@ export default function RevenueReportsPage() {
           <button
             type="button"
             aria-label="Refresh revenue report"
+            title="Refresh revenue report"
             onClick={() => void loadReport()}
             disabled={loading}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-white)] text-[var(--color-muted)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-white)] text-[var(--color-muted)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FiRefreshCw size={17} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
       </div>
 
+      {/* ERROR MESSAGE */}
       {error && (
         <div
           role="alert"
           className="flex flex-col gap-3 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-soft)] px-4 py-3 text-sm text-[var(--color-error)] sm:flex-row sm:items-center sm:justify-between"
         >
           <span>{error}</span>
+
           <button
             type="button"
             onClick={() => void loadReport()}
-            className="w-fit font-semibold underline"
+            disabled={loading}
+            className="w-fit font-semibold underline disabled:opacity-50"
           >
             Try again
           </button>
         </div>
       )}
 
-      {/* Summary cards */}
+      {/* REVENUE SUMMARY */}
       {loading ? (
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           {[1, 2, 3, 4].map((item) => (
@@ -149,18 +195,16 @@ export default function RevenueReportsPage() {
         <RevenueStats summary={report.summary} />
       )}
 
-      {/* Charts */}
+      {/* REVENUE CHARTS */}
       <div className="grid min-w-0 gap-4 xl:grid-cols-[1.2fr_0.9fr]">
         <RevenueOverviewChart data={report.chart} />
+
         <SalesByCategory categories={report.categories} />
       </div>
 
-      {/* Tables */}
+      {/* PRODUCT AND ORDER REPORTS */}
       <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-        <TopSellingProducts
-          products={report.topProducts}
-          onViewAll={() => navigate("/admin/products")}
-        />
+        <TopSellingProducts products={report.topProducts} />
 
         <RecentRevenueOrders
           orders={report.recentOrders}
@@ -168,6 +212,24 @@ export default function RevenueReportsPage() {
         />
       </div>
 
+      {/* EMPTY REPORT MESSAGE */}
+      {!loading &&
+        !error &&
+        report.summary.totalOrders.value === 0 &&
+        report.chart.length === 0 && (
+          <div className="rounded-[var(--radius-card)] border border-[var(--color-stone)] bg-[var(--color-white)] px-5 py-10 text-center">
+            <h3 className="font-heading text-base font-bold text-[var(--color-ink)]">
+              No sales data available
+            </h3>
+
+            <p className="mt-2 text-sm text-[var(--color-muted)]">
+              There are no completed sales for the selected reporting period.
+              Try selecting another date range.
+            </p>
+          </div>
+        )}
+
+      {/* LOADING INDICATOR */}
       {loading && (
         <motion.div
           initial={{ opacity: 0 }}

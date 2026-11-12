@@ -30,6 +30,11 @@ const productSkuSchema = z
   )
   .transform((value) => value.toUpperCase());
 
+const productCategoryIdSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-f\d]{24}$/i, "A valid product category ID is required");
+
 const productFieldsSchema = z.object({
   name: z.string().trim().min(2).max(120),
 
@@ -48,6 +53,8 @@ const productFieldsSchema = z.object({
   brand: z.string().trim().min(1).max(60),
 
   model: z.string().trim().min(1).max(100),
+
+  categoryId: productCategoryIdSchema,
 
   description: z.string().trim().min(10).max(5000),
 

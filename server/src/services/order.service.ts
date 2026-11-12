@@ -73,6 +73,16 @@ type CustomerOrderWithTracking = Record<string, unknown> & {
 };
 
 // ============================================
+// POPULATED PRODUCT CATEGORY TYPE
+// ============================================
+
+interface PopulatedProductCategory {
+  _id: mongoose.Types.ObjectId;
+  name: string;
+  status: string;
+}
+
+// ============================================
 // ORDER NUMBER
 // ============================================
 
@@ -326,7 +336,7 @@ export async function createPendingOrder(
       }
 
       // ============================================
-      // 3. FETCH CURRENT PRODUCTS FROM DATABASE
+      // 3. FETCH CURRENT PRODUCTS AND THEIR CATEGORIES
       // ============================================
 
       const productIds = input.items.map((item) => item.productId);
@@ -334,7 +344,11 @@ export async function createPendingOrder(
       const products = await ProductModel.find({
         _id: { $in: productIds },
         status: "published",
-      }).session(session);
+      })
+        .populate<{
+          categoryId: PopulatedProductCategory | null;
+        }>("categoryId", "name status")
+        .session(session);
 
       const productMap = new Map(
         products.map((product) => [product._id.toString(), product]),
@@ -348,7 +362,7 @@ export async function createPendingOrder(
       }
 
       // ============================================
-      // 4. CALCULATE AUTHORITATIVE ORDER TOTALS
+      // 4. CALCULATE TOTALS AND SNAPSHOT ORDER ITEMS
       // ============================================
 
       let subtotal = 0;
@@ -363,6 +377,17 @@ export async function createPendingOrder(
           );
         }
 
+        const category = product.categoryId;
+
+        // Every newly purchased product must have a valid,
+        // active category before an order can be created.
+        if (!category || category.status !== "active") {
+          throw new OrderServiceError(
+            `${product.name} is assigned to an unavailable category. Please contact support.`,
+            409,
+          );
+        }
+
         const unitPrice = product.price;
         const lineTotal = unitPrice * item.quantity;
 
@@ -370,12 +395,19 @@ export async function createPendingOrder(
 
         return {
           productId: product._id,
+
           name: product.name,
           slug: product.slug,
           brand: product.brand,
           model: product.model,
           condition: product.condition,
           image: product.images[0]?.url ?? "",
+
+          // Historical category snapshot.
+          // These values are saved on the order item itself.
+          categoryId: category._id,
+          categoryName: category.name,
+
           quantity: item.quantity,
           unitPrice,
           lineTotal,

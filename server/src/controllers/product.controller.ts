@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import mongoose from "mongoose";
 
 import ProductModel from "../models/product.model.js";
+import CategoryModel from "../models/Category.js";
 import cloudinary from "../config/cloudinary.js";
 import { uploadImageBuffer } from "../services/cloudinary.service.js";
 
@@ -35,12 +36,72 @@ async function removeCloudinaryImages(publicIds: string[]): Promise<void> {
   );
 }
 
+/**
+ * Check whether a category exists and is active.
+ * Products can only be assigned to active categories.
+ */
+async function isActiveCategory(categoryId: string): Promise<boolean> {
+  if (!mongoose.isValidObjectId(categoryId)) {
+    return false;
+  }
+
+  const category = await CategoryModel.exists({
+    _id: categoryId,
+    status: "active",
+  });
+
+  return Boolean(category);
+}
+
+/**
+ * Identify MongoDB duplicate-key errors.
+ */
+function isDuplicateKeyError(error: unknown): boolean {
+  return (
+    error instanceof mongoose.mongo.MongoServerError && error.code === 11000
+  );
+}
+
+/**
+ * Get the field responsible for a duplicate-key error.
+ */
+function getDuplicateField(error: unknown): string | undefined {
+  if (!isDuplicateKeyError(error)) return undefined;
+
+  return Object.keys(
+    (
+      error as mongoose.mongo.MongoServerError & {
+        keyPattern?: Record<string, number>;
+      }
+    ).keyPattern ?? {},
+  )[0];
+}
+
+/**
+ * Send a consistent duplicate product response.
+ */
+function handleDuplicateProductError(error: unknown, res: Response): void {
+  const duplicateField = getDuplicateField(error);
+
+  res.status(409).json({
+    success: false,
+    message:
+      duplicateField === "sku"
+        ? "A product with this SKU already exists."
+        : duplicateField === "slug"
+          ? "A product with this slug already exists."
+          : "A product with this information already exists.",
+    field: duplicateField ?? "unknown",
+  });
+}
+
 // ============================================
 // PUBLIC STOREFRONT
 // ============================================
 
 /**
  * GET /api/v1/products
+ *
  * Return published products with filtering and pagination.
  */
 export async function getProducts(req: Request, res: Response): Promise<void> {
@@ -72,6 +133,24 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
 
     if (typeof req.query.condition === "string" && req.query.condition.trim()) {
       filter.condition = req.query.condition.trim();
+    }
+
+    // Optional category filtering on the storefront.
+    if (
+      typeof req.query.categoryId === "string" &&
+      req.query.categoryId.trim()
+    ) {
+      const categoryId = req.query.categoryId.trim();
+
+      if (!mongoose.isValidObjectId(categoryId)) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid category ID.",
+        });
+        return;
+      }
+
+      filter.categoryId = categoryId;
     }
 
     if (typeof req.query.search === "string" && req.query.search.trim()) {
@@ -140,6 +219,7 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
         .skip(skip)
         .limit(limit)
         .lean(),
+
       ProductModel.countDocuments(filter),
     ]);
 
@@ -167,6 +247,7 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
 
 /**
  * GET /api/v1/products/:slug
+ *
  * Retrieve one published product by its URL slug.
  */
 export async function getProductBySlug(
@@ -174,8 +255,18 @@ export async function getProductBySlug(
   res: Response,
 ): Promise<void> {
   try {
+    const slug = req.params.slug;
+
+    if (typeof slug !== "string" || !slug.trim()) {
+      res.status(400).json({
+        success: false,
+        message: "A valid product slug is required.",
+      });
+      return;
+    }
+
     const product = await ProductModel.findOne({
-      slug: req.params.slug,
+      slug: slug.trim().toLowerCase(),
       status: "published",
     }).lean();
 
@@ -203,6 +294,7 @@ export async function getProductBySlug(
 
 /**
  * GET /api/v1/brands
+ *
  * Return brands that currently have published products.
  */
 export async function getBrands(_req: Request, res: Response): Promise<void> {
@@ -270,12 +362,23 @@ export async function getAdminInventory(
       ];
     }
 
+    // Filter inventory by category ID, not by brand.
     if (
       typeof req.query.category === "string" &&
       req.query.category.trim() &&
       req.query.category.trim().toLowerCase() !== "all"
     ) {
-      filter.brand = req.query.category.trim();
+      const categoryId = req.query.category.trim();
+
+      if (!mongoose.isValidObjectId(categoryId)) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid category ID.",
+        });
+        return;
+      }
+
+      filter.categoryId = categoryId;
     }
 
     const requestedStatus =
@@ -392,6 +495,7 @@ export async function getAdminInventory(
 
 /**
  * POST /api/v1/products
+ *
  * Create and immediately publish a product.
  */
 export async function createProduct(
@@ -399,6 +503,22 @@ export async function createProduct(
   res: Response,
 ): Promise<void> {
   try {
+    const { categoryId } = req.body as {
+      categoryId: string;
+    };
+
+    // Confirm the selected category exists and is active.
+    const categoryIsActive = await isActiveCategory(categoryId);
+
+    if (!categoryIsActive) {
+      res.status(400).json({
+        success: false,
+        message: "The selected category does not exist or is archived.",
+        field: "categoryId",
+      });
+      return;
+    }
+
     const product = await ProductModel.create({
       ...req.body,
       status: "published",
@@ -419,26 +539,8 @@ export async function createProduct(
       return;
     }
 
-    if (
-      error instanceof mongoose.mongo.MongoServerError &&
-      error.code === 11000
-    ) {
-      const duplicateField = Object.keys(
-        (
-          error as mongoose.mongo.MongoServerError & {
-            keyPattern?: Record<string, number>;
-          }
-        ).keyPattern ?? {},
-      )[0];
-
-      res.status(409).json({
-        success: false,
-        message:
-          duplicateField === "sku"
-            ? "A product with this SKU already exists."
-            : "A product with this slug already exists.",
-        field: duplicateField ?? "unknown",
-      });
+    if (isDuplicateKeyError(error)) {
+      handleDuplicateProductError(error, res);
       return;
     }
 
@@ -457,6 +559,7 @@ export async function createProduct(
 
 /**
  * PATCH /api/v1/products/:id
+ *
  * Update an existing product.
  */
 export async function updateProduct(
@@ -464,9 +567,9 @@ export async function updateProduct(
   res: Response,
 ): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id;
 
-    if (!mongoose.isValidObjectId(id)) {
+    if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
       res.status(400).json({
         success: false,
         message: "Invalid product ID.",
@@ -497,6 +600,20 @@ export async function updateProduct(
         message: "No editable fields were provided.",
       });
       return;
+    }
+
+    // Validate the category only when the request changes it.
+    if (updates.categoryId !== undefined) {
+      const categoryIsActive = await isActiveCategory(updates.categoryId);
+
+      if (!categoryIsActive) {
+        res.status(400).json({
+          success: false,
+          message: "The selected category does not exist or is archived.",
+          field: "categoryId",
+        });
+        return;
+      }
     }
 
     const product = await ProductModel.findByIdAndUpdate(
@@ -531,26 +648,8 @@ export async function updateProduct(
       return;
     }
 
-    if (
-      error instanceof mongoose.mongo.MongoServerError &&
-      error.code === 11000
-    ) {
-      const duplicateField = Object.keys(
-        (
-          error as mongoose.mongo.MongoServerError & {
-            keyPattern?: Record<string, number>;
-          }
-        ).keyPattern ?? {},
-      )[0];
-
-      res.status(409).json({
-        success: false,
-        message:
-          duplicateField === "sku"
-            ? "A product with this SKU already exists."
-            : "A product with this slug already exists.",
-        field: duplicateField ?? "unknown",
-      });
+    if (isDuplicateKeyError(error)) {
+      handleDuplicateProductError(error, res);
       return;
     }
 
@@ -578,12 +677,13 @@ export async function updateProductStock(
   res: Response,
 ): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id;
+
     const { stockQuantity } = req.body as {
       stockQuantity?: number;
     };
 
-    if (!mongoose.isValidObjectId(id)) {
+    if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
       res.status(400).json({
         success: false,
         message: "Invalid product ID.",
@@ -650,6 +750,7 @@ export async function updateProductStock(
 
 /**
  * DELETE /api/v1/products/:id
+ *
  * Archive a product rather than permanently deleting it.
  */
 export async function archiveProduct(
@@ -657,9 +758,9 @@ export async function archiveProduct(
   res: Response,
 ): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id;
 
-    if (!mongoose.isValidObjectId(id)) {
+    if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
       res.status(400).json({
         success: false,
         message: "Invalid product ID.",
@@ -714,9 +815,9 @@ export async function addProductImages(
   const uploadedPublicIds: string[] = [];
 
   try {
-    const { id } = req.params;
+    const id = req.params.id;
 
-    if (!mongoose.isValidObjectId(id)) {
+    if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
       res.status(400).json({
         success: false,
         message: "Invalid product ID.",

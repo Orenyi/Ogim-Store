@@ -22,6 +22,8 @@ import adminTrackingRoutes from "./routes/admin-tracking.routes.js";
 import adminRoleRoutes from "./routes/adminRole.routes.js";
 import adminStaffRoutes from "./routes/adminStaff.routes.js";
 import adminInvitationAcceptanceRoutes from "./routes/adminInvitationAcceptance.routes.js";
+import categoryRoutes from "./routes/category.routes.js";
+import adminRevenueRoutes from "./routes/admin-revenue.routes.js";
 
 const app = express();
 
@@ -58,6 +60,7 @@ app.use("/api/v1/products", productRoutes);
 app.get("/api/v1/brands", getBrands);
 app.use("/api/v1/cart", cartRoutes);
 app.use("/api/v1/orders", orderRoutes);
+app.use("/api/v1/categories", categoryRoutes);
 
 // ============================================
 // ADMIN ROUTES
@@ -70,6 +73,7 @@ app.use("/api/v1/admin/dispatch", adminDispatchRoutes);
 app.use("/api/v1/admin/tracking", adminTrackingRoutes);
 app.use("/api/v1/admin/roles", adminRoleRoutes);
 app.use("/api/v1/admin/staff", adminStaffRoutes);
+app.use("/api/v1/admin/revenue", adminRevenueRoutes);
 
 // Public invitation acceptance routes.
 // These routes have their own trusted-origin, CSRF and rate-limit protection.

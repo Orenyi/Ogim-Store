@@ -60,6 +60,26 @@ const orderItemSchema = new Schema(
       default: "",
     },
 
+    // ============================================
+    // HISTORICAL CATEGORY SNAPSHOT
+    // ============================================
+
+    // Stores the category ID at the time of purchase.
+    // This is a snapshot and is not populated for reporting.
+    categoryId: {
+      type: Schema.Types.ObjectId,
+      ref: "Category",
+      required: true,
+    },
+
+    // Stores the category name at the time of purchase.
+    // This remains unchanged if the category is renamed later.
+    categoryName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
     quantity: {
       type: Number,
       required: true,
@@ -335,6 +355,11 @@ orderSchema.index(
 orderSchema.index({
   fulfilmentStatus: 1,
   createdAt: -1,
+});
+
+// Category-based historical sales reporting.
+orderSchema.index({
+  "items.categoryId": 1,
 });
 
 // ============================================

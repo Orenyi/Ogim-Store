@@ -1,42 +1,48 @@
-import { demoRevenueReports } from "../data/revenue.mock";
-import type {
-  RevenueDateRange,
-  RevenuePeriod,
-  RevenueReport,
-} from "../types/revenue.types";
+import { apiRequest } from "../../lib/api";
 
-const USE_DEMO_DATA = import.meta.env.VITE_USE_ADMIN_MOCKS === "true";
+import type { RevenueDateRange, RevenueReport } from "../types/revenue.types";
 
-function getCustomReport(range: RevenueDateRange): RevenueReport {
-  const report = demoRevenueReports.custom;
+// ============================================
+// API RESPONSE TYPES
+// ============================================
 
-  if (!range.startDate || !range.endDate) {
-    return report;
-  }
-
-  // Custom range needs a backend aggregation to return accurate data.
-  // Keep the response empty rather than presenting unrelated figures.
-  return {
-    ...report,
-    chart: [],
-    categories: [],
-    topProducts: [],
-    recentOrders: [],
-  };
+interface AdminRevenueReportResponse {
+  success: boolean;
+  message: string;
+  data: RevenueReport;
 }
+
+// ============================================
+// GET ADMIN REVENUE REPORT
+// ============================================
 
 export async function getAdminRevenueReport(
   range: RevenueDateRange,
 ): Promise<RevenueReport> {
-  if (!USE_DEMO_DATA) {
-    throw new Error("Revenue reports API has not been connected yet.");
-  }
+  const params = new URLSearchParams();
 
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  params.set("period", range.period);
 
   if (range.period === "custom") {
-    return getCustomReport(range);
+    if (!range.startDate || !range.endDate) {
+      throw new Error(
+        "Both start and end dates are required for a custom revenue report.",
+      );
+    }
+
+    params.set("startDate", range.startDate);
+    params.set("endDate", range.endDate);
   }
 
-  return structuredClone(demoRevenueReports[range.period as RevenuePeriod]);
+  const response = await apiRequest<AdminRevenueReportResponse>(
+    `/admin/revenue?${params.toString()}`,
+  );
+
+  if (!response.success || !response.data) {
+    throw new Error(
+      response.message || "Unable to retrieve the revenue report.",
+    );
+  }
+
+  return response.data;
 }
