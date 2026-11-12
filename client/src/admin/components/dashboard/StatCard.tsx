@@ -5,44 +5,16 @@ export type StatCardProps = {
   title: string;
   value: string;
   icon: ReactNode;
-  percentageChange: number;
-  trendLabel?: string;
-  trendTone?: "success" | "warning" | "danger" | "neutral";
   index?: number;
-};
-
-const trendStyles = {
-  success: {
-    background: "var(--color-success-soft)",
-    color: "var(--color-success)",
-  },
-  warning: {
-    background: "var(--color-warning-soft)",
-    color: "var(--color-warning)",
-  },
-  danger: {
-    background: "var(--color-error-soft)",
-    color: "var(--color-error)",
-  },
-  neutral: {
-    background: "var(--color-surface-muted)",
-    color: "var(--color-muted)",
-  },
 };
 
 export default function StatCard({
   title,
   value,
   icon,
-  percentageChange,
-  trendLabel = "vs previous period",
-  trendTone = "success",
   index = 0,
 }: StatCardProps) {
   const shouldReduceMotion = useReducedMotion();
-  const trend = trendStyles[trendTone];
-
-  const changeText = `${percentageChange > 0 ? "+" : ""}${percentageChange.toFixed(1)}%`;
 
   return (
     <motion.article
@@ -73,23 +45,6 @@ export default function StatCard({
           >
             {value}
           </p>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold sm:text-xs"
-              style={{
-                backgroundColor: trend.background,
-                color: trend.color,
-              }}
-            >
-              {percentageChange > 0 ? "↑" : percentageChange < 0 ? "↓" : "–"}
-              {changeText}
-            </span>
-
-            <span className="text-[10px] leading-4 text-[var(--color-muted)] sm:text-xs">
-              {trendLabel}
-            </span>
-          </div>
         </div>
       </div>
     </motion.article>

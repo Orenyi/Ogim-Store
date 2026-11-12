@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FiBell, FiCalendar, FiMenu, FiChevronDown } from "react-icons/fi";
+import { FiBell, FiMenu } from "react-icons/fi";
 
 import ogimLogo from "../../../assets/images/ogim_logo.webp";
 
@@ -25,6 +25,15 @@ export default function AdminHeader({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const greeting = getGreeting();
+
+  const adminInitials =
+    adminName
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "AD";
 
   return (
     <header className="sticky top-0 z-[var(--z-sticky)] border-b border-[var(--color-border)] bg-[var(--color-paper)]/95 backdrop-blur-md">
@@ -61,17 +70,6 @@ export default function AdminHeader({
 
         {/* Header actions */}
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-          {/* Date range */}
-          <div className="hidden h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--color-border-strong)] bg-[var(--color-white)] px-3 text-xs text-[var(--color-ink)] sm:flex sm:px-4 sm:text-sm">
-            <FiCalendar size={18} />
-
-            <span className="whitespace-nowrap">
-              Oct 1, 2026 – Oct 31, 2026
-            </span>
-
-            <FiChevronDown size={15} className="text-[var(--color-muted)]" />
-          </div>
-
           {/* Notifications */}
           <div className="relative">
             <button
@@ -84,6 +82,7 @@ export default function AdminHeader({
             >
               <FiBell size={19} />
 
+              {/* Notification indicator - will be connected to real notifications later */}
               <span className="absolute right-[9px] top-[8px] h-2.5 w-2.5 rounded-full border-2 border-white bg-[var(--color-accent)]" />
             </button>
 
@@ -98,7 +97,7 @@ export default function AdminHeader({
                     className="absolute right-0 top-12 z-50 w-[min(320px,calc(100vw-32px))] rounded-[var(--radius-card)] border border-[var(--color-border)] bg-white p-4 shadow-[var(--shadow-dropdown)]"
                   >
                     <div className="flex items-center justify-between">
-                      <h3 className="font-heading text-base font-bold">
+                      <h3 className="font-heading text-base font-bold text-[var(--color-ink)]">
                         Notifications
                       </h3>
 
@@ -144,13 +143,7 @@ export default function AdminHeader({
             aria-label={`${adminName} profile`}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-sm font-bold text-white transition-transform hover:scale-105"
           >
-            {adminName
-              .split(" ")
-              .filter(Boolean)
-              .map((part) => part[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase()}
+            {adminInitials}
           </button>
         </div>
       </div>
@@ -158,7 +151,7 @@ export default function AdminHeader({
       {/* Mobile greeting */}
       <div className="px-4 pb-4 lg:hidden sm:px-6">
         <h1 className="font-heading text-[21px] font-extrabold tracking-[-0.045em] text-[var(--color-ink)]">
-          {greeting}, {adminName} <span aria-hidden="true">👋</span>
+          {greeting}, {adminName}
         </h1>
 
         <p className="mt-1 text-xs text-[var(--color-muted)] sm:text-sm">

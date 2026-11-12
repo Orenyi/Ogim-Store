@@ -57,12 +57,16 @@ const statusStyles: Record<
   },
 };
 
+// ============================================
+// STATUS BADGE
+// ============================================
+
 function OrderStatusBadge({ status }: { status: DashboardOrderStatus }) {
   const config = statusStyles[status];
 
   return (
     <span
-      className="inline-flex whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold"
+      className="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-semibold sm:px-3 sm:text-[11px]"
       style={{
         backgroundColor: config.background,
         color: config.color,
@@ -73,6 +77,10 @@ function OrderStatusBadge({ status }: { status: DashboardOrderStatus }) {
   );
 }
 
+// ============================================
+// CUSTOMER AVATAR
+// ============================================
+
 function CustomerAvatar({ initials }: { initials: string }) {
   return (
     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[10px] font-bold text-[var(--color-ink)]">
@@ -81,154 +89,241 @@ function CustomerAvatar({ initials }: { initials: string }) {
   );
 }
 
-export default function RecentOrdersTable({ orders }: RecentOrdersTableProps) {
-  if (orders.length === 0) {
-    return (
-      <div className="flex min-h-[220px] flex-col items-center justify-center px-4 py-10 text-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-muted)]">
-          <FiPackage size={22} />
-        </span>
-        <h3 className="mt-3 text-sm font-bold text-[var(--color-ink)]">
-          No recent orders
-        </h3>
-        <p className="mt-1 max-w-xs text-xs text-[var(--color-muted)]">
-          New customer orders will appear here when they are placed.
-        </p>
-      </div>
-    );
-  }
+// ============================================
+// EMPTY STATE
+// ============================================
 
+function EmptyOrders() {
   return (
-    <>
-      {/* Desktop and tablet table */}
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[680px] border-collapse text-left">
-          <thead>
-            <tr className="border-b border-[var(--color-border)]">
-              {[
-                "Order ID",
-                "Customer",
-                "Items",
-                "Total",
-                "Status",
-                "Updated",
-                "",
-              ].map((heading) => (
-                <th
-                  key={heading || "actions"}
-                  className="whitespace-nowrap px-2 py-3 text-[11px] font-semibold text-[var(--color-muted)] first:pl-0 last:pr-0"
-                >
-                  {heading}
-                </th>
-              ))}
-            </tr>
-          </thead>
+    <div className="flex min-h-[220px] flex-col items-center justify-center px-4 py-10 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-surface-muted)] text-[var(--color-muted)]">
+        <FiPackage size={22} />
+      </span>
 
-          <tbody>
-            {orders.map((order) => (
-              <tr
-                key={order.id}
-                className="border-b border-[var(--color-border)] last:border-0 transition-colors hover:bg-[var(--color-surface-muted)]/60"
+      <h3 className="mt-3 text-sm font-bold text-[var(--color-ink)]">
+        No recent orders
+      </h3>
+
+      <p className="mt-1 max-w-xs text-xs text-[var(--color-muted)]">
+        New customer orders will appear here when they are placed.
+      </p>
+    </div>
+  );
+}
+
+// ============================================
+// DESKTOP TABLE
+// ============================================
+
+function DesktopOrdersTable({ orders }: RecentOrdersTableProps) {
+  return (
+    <div className="hidden w-full min-w-0 lg:block">
+      <table className="w-full table-fixed border-collapse text-left">
+        {/* Control the width of every column */}
+        <colgroup>
+          <col className="w-[20%]" />
+          <col className="w-[21%]" />
+          <col className="w-[17%]" />
+          <col className="w-[13%]" />
+          <col className="w-[13%]" />
+          <col className="w-[11%]" />
+          <col className="w-[5%]" />
+        </colgroup>
+
+        <thead>
+          <tr className="border-b border-[var(--color-border)]">
+            {[
+              "Order ID",
+              "Customer",
+              "Items",
+              "Total",
+              "Status",
+              "Updated",
+              "",
+            ].map((heading, index) => (
+              <th
+                key={heading || "actions"}
+                className={`overflow-hidden py-3 text-[11px] font-semibold text-[var(--color-muted)] ${
+                  index === 0
+                    ? "pr-2 pl-0"
+                    : index === 6
+                      ? "pl-1 pr-0 text-right"
+                      : "px-2"
+                }`}
               >
-                <td className="whitespace-nowrap py-3 pr-3 pl-0">
-                  <Link
-                    to={`/admin/orders/${order.id}`}
-                    className="text-xs font-bold text-[var(--color-ink)] hover:text-[var(--color-accent)]"
-                  >
-                    {order.orderNumber}
-                  </Link>
-                </td>
-
-                <td className="py-3 pr-3">
-                  <div className="flex min-w-[125px] items-center gap-2">
-                    <CustomerAvatar initials={order.customerInitials} />
-                    <span className="max-w-[115px] truncate text-xs font-medium text-[var(--color-ink)]">
-                      {order.customerName}
-                    </span>
-                  </div>
-                </td>
-
-                <td className="max-w-[140px] truncate px-2 py-3 text-xs text-[var(--color-muted)]">
-                  {order.itemSummary}
-                </td>
-
-                <td className="whitespace-nowrap px-2 py-3 text-xs font-semibold tabular-nums text-[var(--color-ink)]">
-                  {currencyFormatter.format(order.total)}
-                </td>
-
-                <td className="px-2 py-3">
-                  <OrderStatusBadge status={order.status} />
-                </td>
-
-                <td className="whitespace-nowrap px-2 py-3 text-xs text-[var(--color-muted)]">
-                  {order.updatedAt}
-                </td>
-
-                <td className="py-3 pl-2 pr-0 text-right">
-                  <Link
-                    to={`/admin/orders/${order.id}`}
-                    aria-label={`View ${order.orderNumber}`}
-                    title="View order"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-muted)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)]"
-                  >
-                    <FiArrowUpRight size={16} />
-                  </Link>
-                </td>
-              </tr>
+                {heading}
+              </th>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </tr>
+        </thead>
 
-      {/* Mobile order cards */}
-      <div className="divide-y divide-[var(--color-border)] md:hidden">
-        {orders.map((order) => (
-          <article key={order.id} className="py-4 first:pt-1 last:pb-1">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <CustomerAvatar initials={order.customerInitials} />
+        <tbody>
+          {orders.map((order) => (
+            <tr
+              key={order.id}
+              className="border-b border-[var(--color-border)] last:border-0 transition-colors hover:bg-[var(--color-surface-muted)]/60"
+            >
+              {/* Order ID */}
+              <td className="min-w-0 overflow-hidden py-3 pr-2 pl-0">
+                <Link
+                  to={`/admin/orders/${order.id}`}
+                  title={order.orderNumber}
+                  className="block truncate text-xs font-bold text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent)]"
+                >
+                  {order.orderNumber}
+                </Link>
+              </td>
 
-                <div className="min-w-0">
-                  <Link
-                    to={`/admin/orders/${order.id}`}
-                    className="block truncate text-xs font-bold text-[var(--color-ink)] hover:text-[var(--color-accent)]"
+              {/* Customer */}
+              <td className="min-w-0 overflow-hidden px-2 py-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <CustomerAvatar initials={order.customerInitials} />
+
+                  <span
+                    title={order.customerName}
+                    className="min-w-0 truncate text-xs font-medium text-[var(--color-ink)]"
                   >
-                    {order.orderNumber}
-                  </Link>
-                  <p className="mt-0.5 truncate text-xs text-[var(--color-muted)]">
                     {order.customerName}
-                  </p>
+                  </span>
                 </div>
-              </div>
+              </td>
 
-              <OrderStatusBadge status={order.status} />
+              {/* Items */}
+              <td
+                title={order.itemSummary}
+                className="min-w-0 overflow-hidden px-2 py-3"
+              >
+                <span className="block truncate text-xs text-[var(--color-muted)]">
+                  {order.itemSummary}
+                </span>
+              </td>
+
+              {/* Total */}
+              <td className="overflow-hidden px-2 py-3">
+                <span
+                  title={currencyFormatter.format(order.total)}
+                  className="block truncate whitespace-nowrap text-xs font-semibold tabular-nums text-[var(--color-ink)]"
+                >
+                  {currencyFormatter.format(order.total)}
+                </span>
+              </td>
+
+              {/* Status */}
+              <td className="overflow-hidden px-2 py-3">
+                <OrderStatusBadge status={order.status} />
+              </td>
+
+              {/* Updated */}
+              <td className="overflow-hidden px-2 py-3">
+                <span
+                  title={order.updatedAt}
+                  className="block truncate whitespace-nowrap text-xs text-[var(--color-muted)]"
+                >
+                  {order.updatedAt}
+                </span>
+              </td>
+
+              {/* View action */}
+              <td className="py-3 pl-1 pr-0 text-right">
+                <Link
+                  to={`/admin/orders/${order.id}`}
+                  aria-label={`View ${order.orderNumber}`}
+                  title="View order"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-muted)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)]"
+                >
+                  <FiArrowUpRight size={16} />
+                </Link>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ============================================
+// RESPONSIVE ORDER CARDS
+// ============================================
+
+function MobileOrdersList({ orders }: RecentOrdersTableProps) {
+  return (
+    <div className="min-w-0 divide-y divide-[var(--color-border)] lg:hidden">
+      {orders.map((order) => (
+        <article key={order.id} className="min-w-0 py-4 first:pt-1 last:pb-1">
+          {/* Customer and order information */}
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <CustomerAvatar initials={order.customerInitials} />
+
+              <div className="min-w-0">
+                <Link
+                  to={`/admin/orders/${order.id}`}
+                  title={order.orderNumber}
+                  className="block truncate text-xs font-bold text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent)]"
+                >
+                  {order.orderNumber}
+                </Link>
+
+                <p className="mt-0.5 truncate text-xs text-[var(--color-muted)]">
+                  {order.customerName}
+                </p>
+              </div>
             </div>
 
-            <div className="mt-3 flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-xs text-[var(--color-muted)]">
-                  {order.itemSummary}
-                </p>
-                <p className="mt-1 text-[10px] text-[var(--color-muted)]">
-                  Updated {order.updatedAt}
-                </p>
-              </div>
+            <div className="shrink-0">
+              <OrderStatusBadge status={order.status} />
+            </div>
+          </div>
 
-              <p className="shrink-0 text-sm font-bold tabular-nums text-[var(--color-ink)]">
-                {currencyFormatter.format(order.total)}
+          {/* Order details */}
+          <div className="mt-3 flex min-w-0 items-end justify-between gap-3">
+            <div className="min-w-0">
+              <p
+                title={order.itemSummary}
+                className="truncate text-xs text-[var(--color-muted)]"
+              >
+                {order.itemSummary}
+              </p>
+
+              <p className="mt-1 text-[10px] text-[var(--color-muted)]">
+                Updated {order.updatedAt}
               </p>
             </div>
 
-            <Link
-              to={`/admin/orders/${order.id}`}
-              className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-accent)]"
-            >
-              View order
-              <FiArrowUpRight size={13} />
-            </Link>
-          </article>
-        ))}
-      </div>
-    </>
+            <p className="shrink-0 text-sm font-bold tabular-nums text-[var(--color-ink)]">
+              {currencyFormatter.format(order.total)}
+            </p>
+          </div>
+
+          {/* View order */}
+          <Link
+            to={`/admin/orders/${order.id}`}
+            className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-accent)] transition-colors hover:text-[var(--color-accent-hover)]"
+          >
+            View order
+            <FiArrowUpRight size={13} />
+          </Link>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
+
+export default function RecentOrdersTable({ orders }: RecentOrdersTableProps) {
+  if (orders.length === 0) {
+    return <EmptyOrders />;
+  }
+
+  return (
+    <div className="w-full min-w-0">
+      <DesktopOrdersTable orders={orders} />
+
+      <MobileOrdersList orders={orders} />
+    </div>
   );
 }

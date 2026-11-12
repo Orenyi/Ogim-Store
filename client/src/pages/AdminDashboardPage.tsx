@@ -18,10 +18,16 @@ export default function AdminDashboardPage() {
   );
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadDashboard = useCallback(async () => {
-    setLoading(true);
+  const loadDashboard = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
     setError(null);
 
     try {
@@ -35,6 +41,7 @@ export default function AdminDashboardPage() {
       );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -42,13 +49,13 @@ export default function AdminDashboardPage() {
     void loadDashboard();
   }, [loadDashboard]);
 
-  // const isDemoMode = import.meta.env.VITE_USE_ADMIN_MOCKS === "true";
-
-  if (loading) {
+  // Initial loading state.
+  if (loading && !dashboard) {
     return <DashboardSkeleton />;
   }
 
-  if (error || !dashboard) {
+  // Error state when no previous dashboard data is available.
+  if (error && !dashboard) {
     return (
       <div className="space-y-5">
         <div
@@ -68,7 +75,7 @@ export default function AdminDashboardPage() {
                 </p>
 
                 <p className="mt-1 text-xs text-[var(--color-muted)]">
-                  {error || "No dashboard information was returned."}
+                  {error}
                 </p>
               </div>
             </div>
@@ -76,9 +83,13 @@ export default function AdminDashboardPage() {
             <button
               type="button"
               onClick={() => void loadDashboard()}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-ink)] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black"
+              disabled={refreshing}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--color-ink)] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <FiRefreshCw size={15} />
+              <FiRefreshCw
+                size={15}
+                className={refreshing ? "animate-spin" : ""}
+              />
               Try again
             </button>
           </div>
@@ -87,8 +98,37 @@ export default function AdminDashboardPage() {
     );
   }
 
+  if (!dashboard) {
+    return null;
+  }
+
   return (
     <div className="space-y-5 sm:space-y-6 lg:space-y-7">
+      {/* Dashboard refresh and error feedback */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs text-[var(--color-muted)]">
+            Live data from your store
+          </p>
+
+          {error && (
+            <p role="alert" className="mt-1 text-xs text-[var(--color-error)]">
+              Refresh failed: {error}
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void loadDashboard(true)}
+          disabled={refreshing}
+          className="inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] border border-[var(--color-stone)] bg-white px-3.5 py-2 text-xs font-semibold text-[var(--color-ink)] transition-colors hover:bg-[var(--color-paper)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <FiRefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </button>
+      </div>
+
       {/* Statistics */}
       <DashboardStats stats={dashboard.stats} />
 

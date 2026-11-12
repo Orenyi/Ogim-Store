@@ -30,6 +30,68 @@ const fullCurrencyFormatter = new Intl.NumberFormat("en-NG", {
   maximumFractionDigits: 0,
 });
 
+const chartDateFormatter = new Intl.DateTimeFormat("en-NG", {
+  timeZone: "Africa/Lagos",
+  day: "numeric",
+  month: "short",
+});
+
+const tooltipDateFormatter = new Intl.DateTimeFormat("en-NG", {
+  timeZone: "Africa/Lagos",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+// ============================================
+// DATE FORMATTER
+// ============================================
+
+function formatChartDate(value: string): string {
+  // Backend returns dates in YYYY-MM-DD format.
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return value;
+  }
+
+  const [, year, month, day] = match;
+
+  const date = new Date(
+    Date.UTC(Number(year), Number(month) - 1, Number(day), 12),
+  );
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return chartDateFormatter.format(date);
+}
+
+function formatTooltipDate(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return value;
+  }
+
+  const [, year, month, day] = match;
+
+  const date = new Date(
+    Date.UTC(Number(year), Number(month) - 1, Number(day), 12),
+  );
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return tooltipDateFormatter.format(date);
+}
+
+// ============================================
+// TOOLTIP
+// ============================================
+
 type TooltipProps = {
   active?: boolean;
   payload?: Array<{
@@ -39,19 +101,28 @@ type TooltipProps = {
 };
 
 function RevenueTooltip({ active, payload }: TooltipProps) {
-  if (!active || !payload?.length) return null;
+  if (!active || !payload?.length) {
+    return null;
+  }
 
   const point = payload[0].payload;
 
   return (
     <div className="rounded-xl border border-[var(--color-border)] bg-white px-3 py-2.5 shadow-[var(--shadow-dropdown)]">
-      <p className="text-xs text-[var(--color-muted)]">{point.date}</p>
+      <p className="text-xs text-[var(--color-muted)]">
+        {formatTooltipDate(point.date)}
+      </p>
+
       <p className="mt-1 text-sm font-bold text-[var(--color-ink)]">
         {fullCurrencyFormatter.format(point.revenue)}
       </p>
     </div>
   );
 }
+
+// ============================================
+// REVENUE CHART
+// ============================================
 
 export default function RevenueChart({ data }: RevenueChartProps) {
   const shouldReduceMotion = useReducedMotion();
@@ -60,12 +131,12 @@ export default function RevenueChart({ data }: RevenueChartProps) {
     () =>
       data.map((item) => ({
         ...item,
-        shortDate: item.date.replace("Oct ", ""),
+        shortDate: formatChartDate(item.date),
       })),
     [data],
   );
 
-  const hasData = chartData.some((item) => item.revenue > 0);
+  const hasData = chartData.some((item) => Number(item.revenue) > 0);
 
   if (!hasData) {
     return (
@@ -73,6 +144,7 @@ export default function RevenueChart({ data }: RevenueChartProps) {
         <p className="text-sm font-semibold text-[var(--color-ink)]">
           No revenue data available
         </p>
+
         <p className="mt-1 text-xs text-[var(--color-muted)]">
           Revenue activity will appear here when orders are paid.
         </p>
@@ -131,7 +203,10 @@ export default function RevenueChart({ data }: RevenueChartProps) {
 
           <Tooltip
             content={<RevenueTooltip />}
-            cursor={{ fill: "var(--color-accent-soft)", opacity: 0.5 }}
+            cursor={{
+              fill: "var(--color-accent-soft)",
+              opacity: 0.5,
+            }}
           />
 
           <Bar

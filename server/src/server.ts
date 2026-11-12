@@ -24,6 +24,7 @@ import adminStaffRoutes from "./routes/adminStaff.routes.js";
 import adminInvitationAcceptanceRoutes from "./routes/adminInvitationAcceptance.routes.js";
 import categoryRoutes from "./routes/category.routes.js";
 import adminRevenueRoutes from "./routes/admin-revenue.routes.js";
+import adminDashboardRoutes from "./routes/admin-dashboard.routes.js";
 
 const app = express();
 
@@ -74,6 +75,7 @@ app.use("/api/v1/admin/tracking", adminTrackingRoutes);
 app.use("/api/v1/admin/roles", adminRoleRoutes);
 app.use("/api/v1/admin/staff", adminStaffRoutes);
 app.use("/api/v1/admin/revenue", adminRevenueRoutes);
+app.use("/api/v1/admin/dashboard", adminDashboardRoutes);
 
 // Public invitation acceptance routes.
 // These routes have their own trusted-origin, CSRF and rate-limit protection.

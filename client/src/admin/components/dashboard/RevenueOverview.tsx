@@ -25,19 +25,52 @@ const compactCurrencyFormatter = new Intl.NumberFormat("en-NG", {
   maximumFractionDigits: 1,
 });
 
+// Get the current year and month using Nigerian time.
+function getCurrentLagosYearMonth(): {
+  year: string;
+  month: string;
+} {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Lagos",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+
+  return { year, month };
+}
+
 export default function RevenueOverview({ data }: RevenueOverviewProps) {
   const [period, setPeriod] = useState<RevenuePeriod>("30days");
+
   const shouldReduceMotion = useReducedMotion();
 
   const filteredData = useMemo(() => {
-    if (period === "7days") return data.slice(-7);
-    if (period === "30days") return data.slice(-30);
+    if (period === "7days") {
+      return data.slice(-7);
+    }
 
-    return data;
+    if (period === "30days") {
+      return data.slice(-30);
+    }
+
+    // Filter only dates belonging to the current month in Lagos.
+    const { year, month } = getCurrentLagosYearMonth();
+    const currentMonthPrefix = `${year}-${month}`;
+
+    return data.filter((item) =>
+      item.date.startsWith(`${currentMonthPrefix}-`),
+    );
   }, [data, period]);
 
   const totalRevenue = useMemo(
-    () => filteredData.reduce((total, item) => total + item.revenue, 0),
+    () =>
+      filteredData.reduce(
+        (total, item) => total + Number(item.revenue || 0),
+        0,
+      ),
     [filteredData],
   );
 
@@ -91,18 +124,33 @@ export default function RevenueOverview({ data }: RevenueOverviewProps) {
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="mb-3 flex items-baseline gap-2">
+      {/* Revenue summary */}
+      <div className="mb-3 flex flex-wrap items-baseline gap-2">
         <p className="font-heading text-lg font-extrabold tracking-[-0.035em] text-[var(--color-ink)] sm:text-xl">
           {compactCurrencyFormatter.format(totalRevenue)}
         </p>
+
         <span className="text-[11px] text-[var(--color-muted)]">
           revenue in selected period
         </span>
       </div>
 
       {/* Chart */}
-      <RevenueChart data={filteredData} />
+      {filteredData.length > 0 ? (
+        <RevenueChart data={filteredData} />
+      ) : (
+        <div className="flex min-h-[220px] items-center justify-center rounded-[var(--radius-control)] border border-dashed border-[var(--color-stone)]">
+          <div className="text-center">
+            <p className="text-sm font-semibold text-[var(--color-ink)]">
+              No revenue data available
+            </p>
+
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              Revenue will appear here when orders are paid.
+            </p>
+          </div>
+        </div>
+      )}
     </motion.section>
   );
 }
