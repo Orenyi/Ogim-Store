@@ -12,8 +12,6 @@ import { useCart } from "../hooks/useCart";
 
 import { ApiError, createOrder, initializeOrderPayment } from "../lib/api";
 
-const PENDING_ORDER_STORAGE_KEY = "ogim_pending_payment_order_id";
-
 export default function CheckoutPage() {
   const navigate = useNavigate();
 
@@ -25,25 +23,30 @@ export default function CheckoutPage() {
   const [orderError, setOrderError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [pendingOrderId, setPendingOrderId] = useState(
-    () => sessionStorage.getItem(PENDING_ORDER_STORAGE_KEY) ?? "",
-  );
+  // Keep the pending order only in this checkout component.
+  // Never reuse a globally shared sessionStorage order ID.
+  const [pendingOrderId, setPendingOrderId] = useState("");
 
   const submissionInProgress = useRef(false);
 
   function goToStep(step: CheckoutStep) {
     setOrderError("");
     setCurrentStep(step);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   }
 
   function clearPendingOrder() {
-    sessionStorage.removeItem(PENDING_ORDER_STORAGE_KEY);
     setPendingOrderId("");
   }
 
   async function handlePlaceOrder() {
-    if (submissionInProgress.current) return;
+    if (submissionInProgress.current) {
+      return;
+    }
 
     setOrderError("");
 
@@ -61,7 +64,7 @@ export default function CheckoutPage() {
       let orderId = pendingOrderId;
 
       // ============================================
-      // 1. CREATE A NEW ORDER IF NONE EXISTS
+      // 1. CREATE A NEW ORDER WHEN REQUIRED
       // ============================================
 
       if (!orderId) {
@@ -117,8 +120,7 @@ export default function CheckoutPage() {
           );
         }
 
-        // Persist the order ID before initializing payment.
-        sessionStorage.setItem(PENDING_ORDER_STORAGE_KEY, orderId);
+        // Keep the ID only in this checkout session.
         setPendingOrderId(orderId);
 
         // The backend removes purchased items from the cart.
@@ -140,27 +142,38 @@ export default function CheckoutPage() {
 
       try {
         paymentResponse = await initializeOrderPayment(orderId);
-      } catch (error) {
-        if (
-          error instanceof ApiError &&
-          error.status === 409 &&
-          /no longer available for payment|already been paid/i.test(
-            error.message,
-          )
-        ) {
-          const orderAlreadyPaid = /already been paid/i.test(error.message);
+      } catch (error: unknown) {
+        if (error instanceof ApiError) {
+          // The order may belong to a previous account,
+          // have been deleted, or no longer be available.
+          if (error.status === 404) {
+            clearPendingOrder();
 
-          clearPendingOrder();
-
-          if (orderAlreadyPaid) {
             throw new Error(
-              "This previous order has already been paid for. Your saved checkout reference has been cleared. If you want to make another purchase, add your new products to your cart and place a new order.",
+              "This checkout order could not be found. Your checkout reference has been cleared. Please click Place order again to create a new order.",
             );
           }
 
-          throw new Error(
-            "Your previous order has expired and can no longer be paid for. Please return to the shop, add your products to your cart again, and create a new order.",
-          );
+          if (
+            error.status === 409 &&
+            /no longer available for payment|already been paid/i.test(
+              error.message,
+            )
+          ) {
+            const orderAlreadyPaid = /already been paid/i.test(error.message);
+
+            clearPendingOrder();
+
+            if (orderAlreadyPaid) {
+              throw new Error(
+                "This previous order has already been paid for. Your checkout reference has been cleared. If you want to make another purchase, add your new products to your cart and place a new order.",
+              );
+            }
+
+            throw new Error(
+              "Your previous order has expired and can no longer be paid for. Please return to the shop, add your products to your cart again, and create a new order.",
+            );
+          }
         }
 
         throw error;
