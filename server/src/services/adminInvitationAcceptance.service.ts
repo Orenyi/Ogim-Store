@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import User from "../models/User.js";
 import AdminRole from "../models/AdminRole.js";
 import AdminInvitation from "../models/AdminInvitation.js";
+import { createStaffJoinedNotifications } from "./admin-notification.service.js";
 
 const INVALID_INVITATION_MESSAGE =
   "This invitation link is invalid, expired, or no longer available.";
@@ -132,6 +133,9 @@ export interface AcceptStaffInvitationInput {
  * in one MongoDB transaction.
  *
  * The invitation can only be accepted once.
+ *
+ * Staff joined notifications are created only after the transaction
+ * successfully commits.
  */
 export async function acceptStaffInvitation(input: AcceptStaffInvitationInput) {
   if (!isValidInvitationToken(input.token)) {
@@ -159,6 +163,9 @@ export async function acceptStaffInvitation(input: AcceptStaffInvitationInput) {
         role: "admin";
         adminType: "staff";
         adminRoleId: string;
+        invitedBy: string;
+        roleName: string;
+        invitationId: string;
       }
     | undefined;
 
@@ -259,6 +266,9 @@ export async function acceptStaffInvitation(input: AcceptStaffInvitationInput) {
         role: "admin",
         adminType: "staff",
         adminRoleId: role._id.toString(),
+        invitedBy: invitation.invitedBy.toString(),
+        roleName: role.name,
+        invitationId: invitation._id.toString(),
       };
     });
   } catch (error) {
@@ -289,7 +299,32 @@ export async function acceptStaffInvitation(input: AcceptStaffInvitationInput) {
     throw new Error("Staff invitation acceptance was unsuccessful.");
   }
 
+  // Notify admins after the account and invitation transaction commits.
+  // A notification failure must never undo a successfully created account.
+  try {
+    await createStaffJoinedNotifications({
+      invitationId: acceptedAccount.invitationId,
+      invitedBy: acceptedAccount.invitedBy,
+      joinedUserId: acceptedAccount.id,
+      joinedName: acceptedAccount.fullName,
+      joinedEmail: acceptedAccount.email,
+      roleName: acceptedAccount.roleName,
+    });
+  } catch (error: unknown) {
+    console.error(
+      "[Admin Notifications] Failed to create staff joined notifications:",
+      error,
+    );
+  }
+
   return {
-    user: acceptedAccount,
+    user: {
+      id: acceptedAccount.id,
+      fullName: acceptedAccount.fullName,
+      email: acceptedAccount.email,
+      role: acceptedAccount.role,
+      adminType: acceptedAccount.adminType,
+      adminRoleId: acceptedAccount.adminRoleId,
+    },
   };
 }

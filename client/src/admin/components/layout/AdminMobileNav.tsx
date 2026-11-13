@@ -1,5 +1,10 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { FiHome, FiShoppingBag, FiBox, FiMoreHorizontal } from "react-icons/fi";
+import {
+  FiHome,
+  FiShoppingBag,
+  FiMoreHorizontal,
+  FiPackage,
+} from "react-icons/fi";
 
 type AdminMobileNavProps = {
   onOpenMore: () => void;
@@ -8,14 +13,13 @@ type AdminMobileNavProps = {
 const items = [
   { label: "Dashboard", path: "/admin", icon: FiHome, end: true },
   { label: "Orders", path: "/admin/orders", icon: FiShoppingBag },
-  { label: "Products", path: "/admin/products", icon: FiBox },
+  { label: "Inventory", path: "/admin/inventory", icon: FiPackage },
 ];
 
 export default function AdminMobileNav({ onOpenMore }: AdminMobileNavProps) {
   const location = useLocation();
 
   const morePaths = [
-    "/admin/inventory",
     "/admin/dispatch",
     "/admin/delivery",
     "/admin/tracking",

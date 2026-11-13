@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FiTruck, FiX } from "react-icons/fi";
+import { createPortal } from "react-dom";
 
 import type {
   AssignDispatchInput,
@@ -116,7 +117,7 @@ export default function AssignDispatchModal({
     }
   }
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -298,6 +299,7 @@ export default function AssignDispatchModal({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

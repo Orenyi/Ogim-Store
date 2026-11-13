@@ -10,6 +10,7 @@ import {
   FiPackage,
   FiX,
 } from "react-icons/fi";
+import { createPortal } from "react-dom";
 
 import type {
   CreateInventoryProductInput,
@@ -439,7 +440,7 @@ export default function AddProductModal({
   const closeDisabled =
     saving || uploading || cleaningImages || closingRef.current;
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -872,6 +873,7 @@ export default function AddProductModal({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

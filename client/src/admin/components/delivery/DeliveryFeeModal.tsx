@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FiX, FiMapPin, FiSave } from "react-icons/fi";
+import { createPortal } from "react-dom";
 import type {
   DeliveryFee,
   DeliveryFeeInput,
@@ -114,7 +115,7 @@ export default function DeliveryFeeModal({
     }
   }
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -280,6 +281,7 @@ export default function DeliveryFeeModal({
           </motion.section>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

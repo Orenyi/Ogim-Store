@@ -6,6 +6,7 @@ import AdminRole, { ADMIN_PERMISSIONS } from "../models/AdminRole.js";
 import User from "../models/User.js";
 
 import { sendStaffInvitationEmail } from "./email.service.js";
+import { createStaffInvitedNotifications } from "./admin-notification.service.js";
 import { env } from "../config/env.js";
 
 // ==================================================
@@ -182,13 +183,6 @@ function validatePermissions(permissions: string[]): AdminPermission[] {
 // STAFF MANAGEMENT AUTHORIZATION
 // ==================================================
 
-/**
- * Retrieves the current administrator and verifies that they
- * are allowed to manage staff.
- *
- * Super Admin receives all defined permissions.
- * Staff receives permissions from their assigned role.
- */
 async function getStaffManagementActor(
   adminId: string,
 ): Promise<StaffManagementActor> {
@@ -258,12 +252,6 @@ async function getStaffManagementActor(
   };
 }
 
-/**
- * Prevents staff from assigning roles containing permissions
- * that they do not personally possess.
- *
- * Super Admin can assign any non-protected role.
- */
 function ensureCanAssignRole(
   actor: StaffManagementActor,
   rolePermissions: AdminPermission[],
@@ -468,9 +456,6 @@ async function deliverInvitationEmail(
 
   invitation.lastEmailAttemptAt = new Date();
   invitation.emailAttemptCount += 1;
-
-  // Record Gmail as the active email provider.
-  // This also updates invitations created before the migration.
   invitation.emailProvider = "gmail";
 
   await invitation.save();
@@ -503,13 +488,11 @@ async function deliverInvitationEmail(
       emailSentAt: invitation.emailSentAt,
     };
   } catch (error) {
-    // Capture the actual email failure for backend debugging.
     const failureReason =
       error instanceof Error ? error.message : "Unknown email delivery error.";
 
     console.error("[Staff Invitation Email Error]", failureReason);
 
-    // Mark the invitation as failed.
     invitation.status = "failed";
     invitation.emailStatus = "failed";
     invitation.failedAt = new Date();
@@ -526,10 +509,30 @@ async function deliverInvitationEmail(
       );
     }
 
-    // Keep internal provider details out of the frontend response.
     throw new AdminStaffError(
       "The invitation was created, but the email could not be sent. You can retry the invitation after resolving the email delivery issue.",
       502,
+    );
+  }
+}
+
+// ==================================================
+// STAFF INVITATION NOTIFICATION
+// ==================================================
+
+async function notifyAdminsOfStaffInvitation(details: {
+  invitationId: string;
+  invitedBy: string;
+  inviteeName: string;
+  inviteeEmail: string;
+  roleName: string;
+}): Promise<void> {
+  try {
+    await createStaffInvitedNotifications(details);
+  } catch (error: unknown) {
+    console.error(
+      "[Admin Notifications] Failed to create staff invitation notifications:",
+      error,
     );
   }
 }
@@ -693,6 +696,20 @@ export async function createStaffInvitation(
       "Invitation could not be retrieved after creation.",
       500,
     );
+  }
+
+  // Only create the notification after the email is confirmed as sent.
+  if (
+    delivery.emailStatus === "sent" &&
+    updatedInvitation.emailStatus === "sent"
+  ) {
+    await notifyAdminsOfStaffInvitation({
+      invitationId: updatedInvitation._id.toString(),
+      invitedBy: adminId,
+      inviteeName: fullName,
+      inviteeEmail: email,
+      roleName: role.name,
+    });
   }
 
   return {

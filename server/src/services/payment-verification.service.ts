@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { env } from "../config/env.js";
 import OrderModel from "../models/Order.js";
 import Payment from "../models/Payment.js";
+import { createPurchasePaidNotifications } from "./admin-notification.service.js";
 
 const PAYSTACK_API_URL = "https://api.paystack.co";
 
@@ -221,6 +222,46 @@ function buildVerificationResult(
     message: options.message,
     order: serializedOrder,
   };
+}
+
+// ============================================
+// CREATE PURCHASE NOTIFICATIONS
+// ============================================
+
+async function notifyAdminsOfSuccessfulPayment(
+  result: PaymentVerificationResult,
+): Promise<void> {
+  const order = result.order;
+
+  // Only notify for a verified, canonically paid order.
+  if (
+    result.verified !== true ||
+    result.paymentStatus !== "success" ||
+    order.paymentStatus !== "paid" ||
+    order.status === "cancelled" ||
+    !order.paidPaymentId ||
+    !order.paymentReference
+  ) {
+    return;
+  }
+
+  try {
+    await createPurchasePaidNotifications({
+      paymentId: order.paidPaymentId,
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      customerName: order.deliveryAddress.fullName || "A customer",
+      amount: order.total,
+      currency: order.currency,
+      paymentReference: order.paymentReference,
+    });
+  } catch (error: unknown) {
+    // Notification failures must never affect payment verification.
+    console.error(
+      "[Admin Notifications] Failed to create purchase notifications:",
+      error,
+    );
+  }
 }
 
 // ============================================
@@ -447,11 +488,16 @@ export async function verifyOrderPayment(
       order.paidPaymentId?.toString() === payment._id.toString();
 
     if (isCanonicalPayment) {
-      return buildVerificationResult(order, payment, {
+      const verificationResult = buildVerificationResult(order, payment, {
         verified: true,
         paymentStatus: "success",
         message: "This payment has already been verified.",
       });
+
+      // Retry notification creation if an earlier attempt failed.
+      await notifyAdminsOfSuccessfulPayment(verificationResult);
+
+      return verificationResult;
     }
 
     // A successful payment that did not pay this order
@@ -579,13 +625,21 @@ export async function verifyOrderPayment(
           latest.order.paidPaymentId?.toString() ===
           latest.payment._id.toString();
 
-        return buildVerificationResult(latest.order, latest.payment, {
-          verified: canonical && latest.order.paymentStatus === "paid",
-          paymentStatus: "success",
-          message: canonical
-            ? "Payment has already been verified."
-            : "Payment requires reconciliation.",
-        });
+        const verificationResult = buildVerificationResult(
+          latest.order,
+          latest.payment,
+          {
+            verified: canonical && latest.order.paymentStatus === "paid",
+            paymentStatus: "success",
+            message: canonical
+              ? "Payment has already been verified."
+              : "Payment requires reconciliation.",
+          },
+        );
+
+        await notifyAdminsOfSuccessfulPayment(verificationResult);
+
+        return verificationResult;
       }
 
       return buildVerificationResult(latest.order, latest.payment, {
@@ -932,6 +986,17 @@ export async function verifyOrderPayment(
         500,
       );
     }
+
+    // ============================================
+    // 19. NOTIFY ADMINS AFTER TRANSACTION COMMIT
+    // ============================================
+
+    // This is deliberately outside session.withTransaction().
+    // It also handles concurrent verification and retries.
+    // The notification service's unique event key prevents
+    // duplicate notification records for the same payment.
+
+    await notifyAdminsOfSuccessfulPayment(verificationResult);
 
     return verificationResult;
   } catch (error: unknown) {

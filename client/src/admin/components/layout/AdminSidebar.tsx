@@ -9,7 +9,6 @@ import {
   FiTruck,
   FiUsers,
   FiMapPin,
-  FiBarChart2,
   FiTrendingUp,
   FiChevronLeft,
   FiChevronRight,
@@ -18,7 +17,6 @@ import {
 } from "react-icons/fi";
 
 import { adminLogout } from "../../../lib/api";
-import ogimLogo from "../../../assets/images/ogim_logo.webp";
 
 type AdminSidebarProps = {
   collapsed: boolean;
@@ -52,10 +50,7 @@ const navigationGroups = [
   },
   {
     title: "Reports",
-    items: [
-      { label: "Revenue", path: "/admin/revenue", icon: FiTrendingUp },
-      { label: "Sales", path: "/admin/reports?tab=sales", icon: FiBarChart2 },
-    ],
+    items: [{ label: "Revenue", path: "/admin/revenue", icon: FiTrendingUp }],
   },
   {
     title: "Settings",
@@ -95,17 +90,28 @@ export default function AdminSidebar({
       {/* Brand */}
       <div
         className={`relative flex h-[76px] shrink-0 items-center ${
-          collapsed ? "justify-center px-3" : "justify-center px-5"
+          collapsed ? "justify-center px-3" : "justify-start px-5"
         }`}
       >
-        <NavLink to="/admin" aria-label="Ogim Store admin dashboard">
+        <NavLink
+          to="/admin"
+          aria-label="Ogim Store admin dashboard"
+          title="Ogim Store"
+          className={`flex min-w-0 items-center ${
+            collapsed ? "justify-center" : "gap-3"
+          }`}
+        >
           <img
-            src={ogimLogo}
+            src="/ogim.webp"
             alt="Ogim Store"
-            className={`object-contain brightness-0 invert ${
-              collapsed ? "h-9 w-9" : "h-10 max-w-[155px]"
-            }`}
+            className="h-9 w-9 shrink-0 object-contain"
           />
+
+          {!collapsed && (
+            <span className="whitespace-nowrap font-heading text-xl font-bold tracking-[-0.04em] text-white">
+              Ogim Store
+            </span>
+          )}
         </NavLink>
 
         <button
@@ -207,8 +213,7 @@ export default function AdminSidebar({
           )}
         </div>
 
-        {/* Keep your existing logout button here */}
-
+        {/* Logout */}
         <button
           type="button"
           onClick={handleLogout}

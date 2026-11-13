@@ -1,9 +1,11 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import { createServer } from "node:http";
 
 import { env } from "./config/env.js";
 import { connectDatabase } from "./config/database.js";
+import { initializeAdminSocket } from "./socket/admin.socket.js";
 
 import productRoutes from "./routes/product.routes.js";
 import authRoutes from "./routes/auth.routes.js";
@@ -25,6 +27,7 @@ import adminInvitationAcceptanceRoutes from "./routes/adminInvitationAcceptance.
 import categoryRoutes from "./routes/category.routes.js";
 import adminRevenueRoutes from "./routes/admin-revenue.routes.js";
 import adminDashboardRoutes from "./routes/admin-dashboard.routes.js";
+import adminNotificationRoutes from "./routes/adminNotification.routes.js";
 
 const app = express();
 
@@ -44,6 +47,16 @@ app.use("/api/v1/payments/paystack/webhook", paystackWebhookRoutes);
 
 app.use(express.json({ limit: "20kb" }));
 app.use(cookieParser());
+
+// ============================================
+// HTTP SERVER
+// ============================================
+
+const httpServer = createServer(app);
+
+// ============================================
+// HEALTH CHECK
+// ============================================
 
 app.get("/api/v1/health", (_req, res) => {
   res.status(200).json({
@@ -76,6 +89,7 @@ app.use("/api/v1/admin/roles", adminRoleRoutes);
 app.use("/api/v1/admin/staff", adminStaffRoutes);
 app.use("/api/v1/admin/revenue", adminRevenueRoutes);
 app.use("/api/v1/admin/dashboard", adminDashboardRoutes);
+app.use("/api/v1/admin/notifications", adminNotificationRoutes);
 
 // Public invitation acceptance routes.
 // These routes have their own trusted-origin, CSRF and rate-limit protection.
@@ -89,11 +103,15 @@ async function startServer(): Promise<void> {
   try {
     await connectDatabase();
 
+    // Initialize authenticated administrator connections.
+    initializeAdminSocket(httpServer);
+
     // Start background order expiration processing.
     startOrderExpirationWorker();
 
-    app.listen(env.PORT, () => {
+    httpServer.listen(env.PORT, () => {
       console.log(`Ogim Store API running on http://localhost:${env.PORT}`);
+      console.log("Admin real-time notification server is ready.");
     });
   } catch (error) {
     console.error("Failed to start Ogim Store:", error);

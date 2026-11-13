@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FiX, FiUserPlus, FiMail, FiShield } from "react-icons/fi";
+import { createPortal } from "react-dom";
 
 import type {
   AdminStaff,
@@ -122,7 +123,7 @@ export default function StaffModal({
     // cannot currently be created.
   }
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -143,6 +144,10 @@ export default function StaffModal({
             initial={{ opacity: 0, y: 20, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 15, scale: 0.98 }}
+            style={{
+              scrollbarWidth: "thin",
+              scrollbarColor: "var(--color-muted) transparent",
+            }}
             className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-[var(--color-border)] bg-[var(--color-paper)] p-5 shadow-[var(--shadow-dropdown)] sm:rounded-2xl sm:p-6"
           >
             {/* Header */}
@@ -382,6 +387,7 @@ export default function StaffModal({
           </motion.section>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

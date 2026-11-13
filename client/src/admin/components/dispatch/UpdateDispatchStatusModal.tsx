@@ -7,6 +7,7 @@ import {
   FiTruck,
   FiX,
 } from "react-icons/fi";
+import { createPortal } from "react-dom";
 
 import type { DispatchOrder, DispatchStatus } from "../../types/dispatch.types";
 import { getDispatchStatusLabel } from "../../utils/dispatch.utils";
@@ -55,7 +56,7 @@ export default function UpdateDispatchStatusModal({
 
   const isDelivered = nextStatus === "delivered";
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -225,6 +226,7 @@ export default function UpdateDispatchStatusModal({
           </motion.section>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

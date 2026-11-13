@@ -17,6 +17,8 @@ export const ADMIN_PERMISSIONS = [
   "reports.view",
   "staff.view",
   "staff.manage",
+  "notifications.purchases.view",
+  "notifications.staff.view",
   "settings.manage",
 ] as const;
 

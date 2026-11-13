@@ -3,12 +3,10 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   FiX,
-  FiPackage,
   FiUsers,
   FiTruck,
   FiMapPin,
   FiTrendingUp,
-  FiBarChart2,
   FiBox,
   FiLogOut,
   FiLoader,
@@ -24,13 +22,12 @@ type AdminMobileMenuProps = {
 };
 
 const menuItems = [
-  { label: "Inventory", path: "/admin/inventory", icon: FiPackage },
   { label: "Customers", path: "/admin/customers", icon: FiUsers },
   { label: "Dispatch", path: "/admin/dispatch", icon: FiBox },
   { label: "Delivery Fees", path: "/admin/delivery-fees", icon: FiTruck },
   { label: "Order Tracking", path: "/admin/tracking", icon: FiMapPin },
   { label: "Revenue", path: "/admin/revenue", icon: FiTrendingUp },
-  { label: "Sales", path: "/admin/reports?tab=sales", icon: FiBarChart2 },
+
   { label: "Users & Roles", path: "/admin/users", icon: FiUsers },
 ];
 
