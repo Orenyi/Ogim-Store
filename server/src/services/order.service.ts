@@ -74,6 +74,70 @@ type CustomerOrderWithTracking = Record<string, unknown> & {
 };
 
 // ============================================
+// CATEGORY ID NORMALIZATION
+// ============================================
+
+/**
+ * Extracts a valid MongoDB ObjectId string from:
+ * - Native Mongoose/BSON ObjectIds.
+ * - ObjectId strings.
+ * - MongoDB Extended JSON objects containing $oid.
+ * - Populated documents containing _id.
+ * - Objects containing an id property.
+ *
+ * Returns null when the reference cannot be validated.
+ */
+function getCategoryObjectId(value: unknown): string | null {
+  if (value instanceof mongoose.Types.ObjectId) {
+    return value.toHexString();
+  }
+
+  if (typeof value === "string") {
+    return mongoose.isValidObjectId(value)
+      ? new mongoose.Types.ObjectId(value).toHexString()
+      : null;
+  }
+
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const reference = value as Record<string, unknown>;
+
+  // Handle BSON ObjectId-like objects.
+  if (typeof reference.toHexString === "function") {
+    try {
+      const id = (reference.toHexString as () => string).call(value);
+
+      if (mongoose.isValidObjectId(id)) {
+        return new mongoose.Types.ObjectId(id).toHexString();
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  // Handle MongoDB Extended JSON.
+  if (typeof reference.$oid === "string") {
+    return mongoose.isValidObjectId(reference.$oid)
+      ? new mongoose.Types.ObjectId(reference.$oid).toHexString()
+      : null;
+  }
+
+  // Handle populated Mongoose documents.
+  if (reference._id !== undefined) {
+    return getCategoryObjectId(reference._id);
+  }
+
+  // Handle objects with an id property.
+  if (reference.id !== undefined) {
+    return getCategoryObjectId(reference.id);
+  }
+
+  return null;
+}
+
+// ============================================
 // ORDER NUMBER
 // ============================================
 
@@ -346,22 +410,26 @@ export async function createPendingOrder(
       }
 
       // ============================================
-      // 4. FETCH CATEGORIES DIRECTLY
+      // 4. NORMALIZE AND FETCH CATEGORY REFERENCES
       // ============================================
 
       const categoryIds = [
         ...new Set(
           products
-            .map((product) => product.categoryId?.toString())
-            .filter((id): id is string => Boolean(id)),
+            .map((product) => getCategoryObjectId(product.categoryId))
+            .filter((id): id is string => id !== null),
         ),
       ];
 
-      const categories = await CategoryModel.find({
-        _id: { $in: categoryIds },
-      })
-        .select("_id name status")
-        .session(session);
+      const categories = categoryIds.length
+        ? await CategoryModel.find({
+            _id: {
+              $in: categoryIds.map((id) => new mongoose.Types.ObjectId(id)),
+            },
+          })
+            .select("_id name status")
+            .session(session)
+        : [];
 
       const categoryMap = new Map(
         categories.map((category) => [category._id.toString(), category]),
@@ -383,7 +451,7 @@ export async function createPendingOrder(
           );
         }
 
-        const categoryId = product.categoryId?.toString();
+        const categoryId = getCategoryObjectId(product.categoryId);
 
         const category = categoryId ? categoryMap.get(categoryId) : null;
 
@@ -457,7 +525,7 @@ export async function createPendingOrder(
             },
           },
           {
-            new: false,
+            returnDocument: "before",
             session,
           },
         );
@@ -619,7 +687,7 @@ async function restoreOrderStock(
           },
         },
         {
-          new: true,
+          returnDocument: "after",
           session,
         },
       );
