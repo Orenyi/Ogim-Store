@@ -33,9 +33,16 @@ import { requireAdmin } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
-router.get("/csrf", getCsrfToken);
+// ============================================
+// CSRF TOKEN
+// ============================================
 
-// Admin authentication
+router.get("/csrf", requireTrustedOrigin, getCsrfToken);
+
+// ============================================
+// ADMIN AUTHENTICATION
+// ============================================
+
 router.post(
   "/admin/login",
   requireTrustedOrigin,
@@ -46,7 +53,10 @@ router.post(
 
 router.get("/admin/me", requireAdmin, adminMe);
 
-// Registration
+// ============================================
+// CUSTOMER REGISTRATION
+// ============================================
+
 router.post(
   "/register",
   requireTrustedOrigin,
@@ -55,7 +65,10 @@ router.post(
   register,
 );
 
-// Login
+// ============================================
+// CUSTOMER LOGIN
+// ============================================
+
 router.post(
   "/login",
   requireTrustedOrigin,
@@ -64,7 +77,10 @@ router.post(
   login,
 );
 
-// Google authentication
+// ============================================
+// GOOGLE AUTHENTICATION
+// ============================================
+
 router.post(
   "/google",
   requireTrustedOrigin,
@@ -73,7 +89,10 @@ router.post(
   googleLogin,
 );
 
-// Forgot password
+// ============================================
+// PASSWORD RECOVERY
+// ============================================
+
 router.post(
   "/forgot-password",
   requireTrustedOrigin,
@@ -82,7 +101,6 @@ router.post(
   forgotPassword,
 );
 
-// Reset password
 router.post(
   "/reset-password",
   requireTrustedOrigin,
@@ -91,7 +109,10 @@ router.post(
   resetPassword,
 );
 
-// Refresh session
+// ============================================
+// SESSION MANAGEMENT
+// ============================================
+
 router.post(
   "/refresh",
   requireTrustedOrigin,
@@ -100,10 +121,14 @@ router.post(
   refresh,
 );
 
-// Current authenticated customer
+router.post("/logout", requireTrustedOrigin, requireCsrfToken, logout);
+
+// ============================================
+// AUTHENTICATED CUSTOMER ROUTES
+// ============================================
+
 router.get("/me", requireCustomerAuth, me);
 
-// Delete customer account
 router.delete(
   "/account",
   requireTrustedOrigin,
@@ -111,8 +136,5 @@ router.delete(
   requireCustomerAuth,
   deleteAccount,
 );
-
-// Logout
-router.post("/logout", requireTrustedOrigin, requireCsrfToken, logout);
 
 export default router;

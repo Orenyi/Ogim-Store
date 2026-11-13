@@ -33,11 +33,13 @@ const app = express();
 
 app.disable("x-powered-by");
 
+const allowedOrigin = env.CLIENT_URL.replace(/\/$/, "");
+
 app.use(
   cors({
-    origin: env.CLIENT_URL,
+    origin: allowedOrigin,
     credentials: true,
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "X-CSRF-Token", "Authorization"],
   }),
 );
@@ -110,7 +112,8 @@ async function startServer(): Promise<void> {
     startOrderExpirationWorker();
 
     httpServer.listen(env.PORT, () => {
-      console.log(`Ogim Store API running on http://localhost:${env.PORT}`);
+      console.log(`Ogim Store API listening on port ${env.PORT}`);
+      console.log(`Allowed frontend origin: ${allowedOrigin}`);
       console.log("Admin real-time notification server is ready.");
     });
   } catch (error) {

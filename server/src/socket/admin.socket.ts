@@ -62,6 +62,12 @@ type AdminSocketServer = Server<
 let adminIO: AdminSocketServer | null = null;
 
 // ============================================
+// PRODUCTION ORIGIN
+// ============================================
+
+const allowedOrigin = env.CLIENT_URL.replace(/\/$/, "");
+
+// ============================================
 // COOKIE HELPERS
 // ============================================
 
@@ -172,9 +178,20 @@ export function initializeAdminSocket(
     AdminSocketData
   >(httpServer, {
     cors: {
-      origin: env.CLIENT_URL,
+      origin: allowedOrigin,
       credentials: true,
       methods: ["GET", "POST"],
+    },
+
+    allowRequest: (request, callback) => {
+      const requestOrigin = request.headers.origin;
+
+      if (requestOrigin !== allowedOrigin) {
+        callback("Origin not allowed.", false);
+        return;
+      }
+
+      callback(null, true);
     },
   });
 

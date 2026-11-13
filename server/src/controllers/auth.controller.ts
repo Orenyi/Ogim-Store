@@ -30,21 +30,21 @@ const isProduction = process.env.NODE_ENV === "production";
 const accessCookieOptions = {
   httpOnly: true,
   secure: isProduction,
-  sameSite: "lax" as const,
+  sameSite: (isProduction ? "none" : "lax") as "none" | "lax",
   path: "/",
 };
 
 const refreshCookieOptions = {
   httpOnly: true,
   secure: isProduction,
-  sameSite: "lax" as const,
+  sameSite: (isProduction ? "none" : "lax") as "none" | "lax",
   path: "/api/v1/auth",
 };
 
 const csrfCookieOptions = {
   httpOnly: false,
   secure: isProduction,
-  sameSite: "lax" as const,
+  sameSite: (isProduction ? "none" : "lax") as "none" | "lax",
   path: "/",
 };
 
