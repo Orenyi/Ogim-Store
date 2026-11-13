@@ -24,8 +24,6 @@ export default function AdminLayout() {
     setMobileMenuOpen(false);
   }, []);
 
-  // Verify the admin session when the layout first mounts.
-  // Normal navigation between admin pages will not trigger this again.
   useEffect(() => {
     let isMounted = true;
 
@@ -38,7 +36,16 @@ export default function AdminLayout() {
 
         if (!isMounted) return;
 
-        if (!response.user || response.user.role !== "admin") {
+        if (
+          !response.user ||
+          response.user.role !== "admin" ||
+          !response.user.adminType
+        ) {
+          navigate("/admin/login", { replace: true });
+          return;
+        }
+
+        if (response.user.adminType === "staff" && !response.user.adminRole) {
           navigate("/admin/login", { replace: true });
           return;
         }
@@ -82,7 +89,7 @@ export default function AdminLayout() {
     setRetryCount((count) => count + 1);
   };
 
-  // Initial session check only.
+  // Loading state
   if (!sessionReady) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[var(--color-paper)]">
@@ -91,7 +98,7 @@ export default function AdminLayout() {
     );
   }
 
-  // Show an error only when the initial session request fails.
+  // Connection error state
   if (sessionError) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[var(--color-paper)] px-4">
@@ -116,7 +123,6 @@ export default function AdminLayout() {
     );
   }
 
-  // Redirect is in progress if there is no authenticated admin.
   if (!admin) {
     return null;
   }
@@ -124,21 +130,21 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-[var(--color-paper)] text-[var(--color-ink)]">
       <div className="flex min-h-screen">
-        {/* Desktop sidebar */}
+        {/* Desktop Sidebar */}
         <AdminSidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed((previous) => !previous)}
-          adminName={admin.fullName}
-          adminRole="Administrator"
+          admin={admin}
         />
 
-        {/* Main application */}
         <div className="min-w-0 flex-1">
+          {/* Admin Header */}
           <AdminHeader
             onOpenMobileMenu={() => setMobileMenuOpen(true)}
             adminName={admin.fullName}
           />
 
+          {/* Page Content */}
           <main className="min-h-[calc(100vh-76px)] px-4 pb-24 pt-5 sm:px-6 lg:px-8 lg:pb-8">
             <div className="mx-auto w-full max-w-[1600px]">
               <Outlet />
@@ -147,17 +153,16 @@ export default function AdminLayout() {
         </div>
       </div>
 
-      {/* Mobile bottom navigation */}
-      <AdminMobileNav onOpenMore={() => setMobileMenuOpen(true)} />
+      {/* Mobile Bottom Navigation */}
+      <AdminMobileNav
+        onOpenMore={() => setMobileMenuOpen(true)}
+        admin={admin}
+      />
 
-      {/* Mobile navigation drawer */}
+      {/* Mobile Navigation Drawer */}
       <AnimatePresence>
         {mobileMenuOpen && (
-          <AdminMobileMenu
-            onClose={closeMobileMenu}
-            adminName={admin.fullName}
-            adminRole="Administrator"
-          />
+          <AdminMobileMenu onClose={closeMobileMenu} admin={admin} />
         )}
       </AnimatePresence>
     </div>

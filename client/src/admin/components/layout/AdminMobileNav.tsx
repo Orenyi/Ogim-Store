@@ -6,31 +6,66 @@ import {
   FiPackage,
 } from "react-icons/fi";
 
+import type { AdminPermission, AdminUser } from "../../../lib/api";
+
 type AdminMobileNavProps = {
   onOpenMore: () => void;
+  admin: AdminUser;
 };
 
-const items = [
-  { label: "Dashboard", path: "/admin", icon: FiHome, end: true },
-  { label: "Orders", path: "/admin/orders", icon: FiShoppingBag },
-  { label: "Inventory", path: "/admin/inventory", icon: FiPackage },
+const items: {
+  label: string;
+  path: string;
+  icon: typeof FiHome;
+  permission: AdminPermission;
+  end?: boolean;
+}[] = [
+  {
+    label: "Dashboard",
+    path: "/admin",
+    icon: FiHome,
+    permission: "dashboard.view",
+    end: true,
+  },
+  {
+    label: "Orders",
+    path: "/admin/orders",
+    icon: FiShoppingBag,
+    permission: "orders.view",
+  },
+  {
+    label: "Inventory",
+    path: "/admin/inventory",
+    icon: FiPackage,
+    permission: "inventory.view",
+  },
 ];
 
-export default function AdminMobileNav({ onOpenMore }: AdminMobileNavProps) {
+export default function AdminMobileNav({
+  onOpenMore,
+  admin,
+}: AdminMobileNavProps) {
   const location = useLocation();
+
+  const isSuperAdmin = admin.adminType === "super_admin";
+  const adminPermissions = admin.adminRole?.permissions ?? [];
+
+  const visibleItems = items.filter(
+    (item) => isSuperAdmin || adminPermissions.includes(item.permission),
+  );
 
   const morePaths = [
     "/admin/dispatch",
-    "/admin/delivery",
+    "/admin/delivery-fees",
     "/admin/tracking",
-    "/admin/staff",
-    "/admin/reports",
-    "/admin/settings",
+    "/admin/users",
+    "/admin/revenue",
     "/admin/customers",
   ];
 
-  const moreActive = morePaths.some((path) =>
-    location.pathname.startsWith(path),
+  const moreActive = morePaths.some(
+    (path) =>
+      location.pathname === path || location.pathname.startsWith(`${path}/`),
   );
 
   return (
@@ -38,8 +73,13 @@ export default function AdminMobileNav({ onOpenMore }: AdminMobileNavProps) {
       aria-label="Mobile admin navigation"
       className="fixed inset-x-0 bottom-0 z-[var(--z-sticky)] border-t border-[var(--color-border)] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg lg:hidden"
     >
-      <div className="grid h-[66px] grid-cols-4">
-        {items.map((item) => {
+      <div
+        className="grid h-[66px]"
+        style={{
+          gridTemplateColumns: `repeat(${visibleItems.length + 1}, minmax(0, 1fr))`,
+        }}
+      >
+        {visibleItems.map((item) => {
           const Icon = item.icon;
 
           return (
@@ -69,7 +109,8 @@ export default function AdminMobileNav({ onOpenMore }: AdminMobileNavProps) {
           type="button"
           onClick={onOpenMore}
           aria-expanded={moreActive}
-          className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium ${
+          aria-label="Open more admin navigation options"
+          className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
             moreActive
               ? "text-[var(--color-accent)]"
               : "text-[var(--color-muted)]"

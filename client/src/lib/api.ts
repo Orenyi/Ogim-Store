@@ -32,10 +32,51 @@ export interface ResetPasswordPayload {
 // ADMIN AUTHENTICATION TYPES
 // ============================================
 
+export type AdminPermission =
+  | "dashboard.view"
+  | "orders.view"
+  | "orders.manage"
+  | "products.view"
+  | "products.manage"
+  | "inventory.view"
+  | "inventory.manage"
+  | "customers.view"
+  | "customers.manage"
+  | "dispatch.view"
+  | "dispatch.manage"
+  | "delivery.manage"
+  | "tracking.manage"
+  | "reports.view"
+  | "staff.view"
+  | "staff.manage"
+  | "notifications.purchases.view"
+  | "notifications.staff.view"
+  | "settings.manage";
+
+export type AdminRoleColor = "orange" | "blue" | "purple" | "green" | "yellow";
+
+export interface AdminAssignedRole {
+  id: string;
+  name: string;
+  color: AdminRoleColor;
+  permissions: AdminPermission[];
+}
+
 export interface AdminUser {
   id: string;
   fullName: string;
   email: string;
+  phoneNumber?: string;
+  role: "admin";
+  adminType: "super_admin" | "staff";
+  adminRole: AdminAssignedRole | null;
+}
+
+export interface AdminLoginUser {
+  id: string;
+  fullName: string;
+  email: string;
+  phoneNumber?: string;
   role: "admin";
 }
 
@@ -43,6 +84,12 @@ export interface AdminLoginPayload {
   email: string;
   password: string;
   rememberMe?: boolean;
+}
+
+export interface AdminLoginResponse {
+  success: boolean;
+  message?: string;
+  user: AdminLoginUser;
 }
 
 export interface AdminAuthResponse {
@@ -58,7 +105,7 @@ export interface AdminAuthResponse {
 export interface AdminInvitationRole {
   name: string;
   description: string;
-  color: "orange" | "blue" | "purple" | "green" | "yellow";
+  color: AdminRoleColor;
 }
 
 export interface AdminInvitationDetails {
@@ -561,8 +608,8 @@ export async function apiRequest<T>(
 
 export async function adminLogin(
   payload: AdminLoginPayload,
-): Promise<AdminAuthResponse> {
-  return apiRequest<AdminAuthResponse>("/auth/admin/login", {
+): Promise<AdminLoginResponse> {
+  return apiRequest<AdminLoginResponse>("/auth/admin/login", {
     method: "POST",
     body: JSON.stringify(payload),
   });

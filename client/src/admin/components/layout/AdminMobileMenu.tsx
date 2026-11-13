@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import type { IconType } from "react-icons";
 import {
   FiX,
   FiUsers,
@@ -12,36 +13,92 @@ import {
   FiLoader,
 } from "react-icons/fi";
 
-import { adminLogout } from "../../../lib/api";
+import {
+  adminLogout,
+  type AdminPermission,
+  type AdminUser,
+} from "../../../lib/api";
+
 import ogimLogo from "../../../assets/images/ogim_logo.webp";
 
 type AdminMobileMenuProps = {
   onClose: () => void;
-  adminName: string;
-  adminRole: string;
+  admin: AdminUser;
 };
 
-const menuItems = [
-  { label: "Customers", path: "/admin/customers", icon: FiUsers },
-  { label: "Dispatch", path: "/admin/dispatch", icon: FiBox },
-  { label: "Delivery Fees", path: "/admin/delivery-fees", icon: FiTruck },
-  { label: "Order Tracking", path: "/admin/tracking", icon: FiMapPin },
-  { label: "Revenue", path: "/admin/revenue", icon: FiTrendingUp },
+type MenuItem = {
+  label: string;
+  path: string;
+  icon: IconType;
+  permission: AdminPermission;
+};
 
-  { label: "Users & Roles", path: "/admin/users", icon: FiUsers },
+const menuItems: MenuItem[] = [
+  {
+    label: "Customers",
+    path: "/admin/customers",
+    icon: FiUsers,
+    permission: "customers.view",
+  },
+  {
+    label: "Dispatch",
+    path: "/admin/dispatch",
+    icon: FiBox,
+    permission: "dispatch.view",
+  },
+  {
+    label: "Delivery Fees",
+    path: "/admin/delivery-fees",
+    icon: FiTruck,
+    permission: "delivery.manage",
+  },
+  {
+    label: "Order Tracking",
+    path: "/admin/tracking",
+    icon: FiMapPin,
+    permission: "tracking.manage",
+  },
+  {
+    label: "Revenue",
+    path: "/admin/revenue",
+    icon: FiTrendingUp,
+    permission: "reports.view",
+  },
+  {
+    label: "Users & Roles",
+    path: "/admin/users",
+    icon: FiUsers,
+    permission: "staff.view",
+  },
 ];
 
 export default function AdminMobileMenu({
   onClose,
-  adminName,
-  adminRole,
+  admin,
 }: AdminMobileMenuProps) {
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
 
+  const isSuperAdmin = admin.adminType === "super_admin";
+  const adminPermissions = admin.adminRole?.permissions ?? [];
+
+  const visibleMenuItems = useMemo(
+    () =>
+      menuItems.filter(
+        (item) => isSuperAdmin || adminPermissions.includes(item.permission),
+      ),
+    [isSuperAdmin, adminPermissions],
+  );
+
+  const displayedRole = isSuperAdmin
+    ? "Super Admin"
+    : (admin.adminRole?.name ?? "Staff");
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onClose();
+      }
     };
 
     document.addEventListener("keydown", handleKeyDown);
@@ -68,7 +125,7 @@ export default function AdminMobileMenu({
     }
   }
 
-  const initials = adminName
+  const initials = admin.fullName
     .trim()
     .split(/\s+/)
     .filter(Boolean)
@@ -130,7 +187,7 @@ export default function AdminMobileMenu({
             More options
           </p>
 
-          {menuItems.map((item) => {
+          {visibleMenuItems.map((item) => {
             const Icon = item.icon;
 
             return (
@@ -151,6 +208,12 @@ export default function AdminMobileMenu({
               </NavLink>
             );
           })}
+
+          {visibleMenuItems.length === 0 && (
+            <p className="px-3 py-4 text-sm text-white/50">
+              No additional sections are available for your assigned role.
+            </p>
+          )}
         </nav>
 
         {/* Admin profile and logout */}
@@ -162,11 +225,11 @@ export default function AdminMobileMenu({
 
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold">
-                {adminName}
+                {admin.fullName}
               </span>
 
               <span className="block truncate text-xs capitalize text-white/50">
-                {adminRole}
+                {displayedRole}
               </span>
             </span>
           </div>

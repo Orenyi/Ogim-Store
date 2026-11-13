@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { NavLink, useNavigate } from "react-router-dom";
+import type { IconType } from "react-icons";
 import {
   FiHome,
   FiShoppingBag,
@@ -16,56 +17,137 @@ import {
   FiLoader,
 } from "react-icons/fi";
 
-import { adminLogout } from "../../../lib/api";
+import {
+  adminLogout,
+  type AdminPermission,
+  type AdminUser,
+} from "../../../lib/api";
 
 type AdminSidebarProps = {
   collapsed: boolean;
   onToggle: () => void;
-  adminName: string;
-  adminRole: string;
+  admin: AdminUser;
 };
 
-const navigationGroups = [
+type NavigationItem = {
+  label: string;
+  path: string;
+  icon: IconType;
+  permission: AdminPermission;
+  end?: boolean;
+  badge?: string;
+};
+
+type NavigationGroup = {
+  title: string;
+  items: NavigationItem[];
+};
+
+const navigationGroups: NavigationGroup[] = [
   {
     title: "Main",
     items: [
-      { label: "Dashboard", path: "/admin", icon: FiHome, end: true },
+      {
+        label: "Dashboard",
+        path: "/admin",
+        icon: FiHome,
+        permission: "dashboard.view",
+        end: true,
+      },
       {
         label: "Orders",
         path: "/admin/orders",
         icon: FiShoppingBag,
+        permission: "orders.view",
         badge: "12",
       },
-      { label: "Inventory", path: "/admin/inventory", icon: FiPackage },
-      { label: "Customers", path: "/admin/customers", icon: FiUsers },
+      {
+        label: "Inventory",
+        path: "/admin/inventory",
+        icon: FiPackage,
+        permission: "inventory.view",
+      },
+      {
+        label: "Customers",
+        path: "/admin/customers",
+        icon: FiUsers,
+        permission: "customers.view",
+      },
     ],
   },
   {
     title: "Fulfilment",
     items: [
-      { label: "Dispatch", path: "/admin/dispatch", icon: FiBox },
-      { label: "Delivery Fees", path: "/admin/delivery-fees", icon: FiTruck },
-      { label: "Tracking", path: "/admin/tracking", icon: FiMapPin },
+      {
+        label: "Dispatch",
+        path: "/admin/dispatch",
+        icon: FiBox,
+        permission: "dispatch.view",
+      },
+      {
+        label: "Delivery Fees",
+        path: "/admin/delivery-fees",
+        icon: FiTruck,
+        permission: "delivery.manage",
+      },
+      {
+        label: "Tracking",
+        path: "/admin/tracking",
+        icon: FiMapPin,
+        permission: "tracking.manage",
+      },
     ],
   },
   {
     title: "Reports",
-    items: [{ label: "Revenue", path: "/admin/revenue", icon: FiTrendingUp }],
+    items: [
+      {
+        label: "Revenue",
+        path: "/admin/revenue",
+        icon: FiTrendingUp,
+        permission: "reports.view",
+      },
+    ],
   },
   {
     title: "Settings",
-    items: [{ label: "Users & Roles", path: "/admin/users", icon: FiUsers }],
+    items: [
+      {
+        label: "Users & Roles",
+        path: "/admin/users",
+        icon: FiUsers,
+        permission: "staff.view",
+      },
+    ],
   },
 ];
 
 export default function AdminSidebar({
   collapsed,
   onToggle,
-  adminName,
-  adminRole,
+  admin,
 }: AdminSidebarProps) {
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const isSuperAdmin = admin.adminType === "super_admin";
+
+  const adminPermissions = admin.adminRole?.permissions ?? [];
+
+  const visibleNavigationGroups = useMemo(() => {
+    return navigationGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(
+          (item) => isSuperAdmin || adminPermissions.includes(item.permission),
+        ),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [isSuperAdmin, adminPermissions]);
+
+  const displayedRole = isSuperAdmin
+    ? "Super Admin"
+    : (admin.adminRole?.name ?? "Staff");
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -80,6 +162,14 @@ export default function AdminSidebar({
       setLoggingOut(false);
     }
   }
+
+  const initials = admin.fullName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2);
 
   return (
     <motion.aside
@@ -130,7 +220,7 @@ export default function AdminSidebar({
 
       {/* Navigation */}
       <nav className="admin-sidebar-scroll flex-1 overflow-y-auto px-3 pb-5 pt-3">
-        {navigationGroups.map((group) => (
+        {visibleNavigationGroups.map((group) => (
           <div key={group.title} className="mb-7">
             {!collapsed && (
               <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
@@ -191,23 +281,17 @@ export default function AdminSidebar({
           }`}
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-sm font-bold uppercase text-white">
-            {adminName
-              .trim()
-              .split(/\s+/)
-              .filter(Boolean)
-              .map((part) => part[0])
-              .join("")
-              .slice(0, 2)}
+            {initials}
           </span>
 
           {!collapsed && (
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">
-                {adminName}
+                {admin.fullName}
               </span>
 
               <span className="block truncate text-xs capitalize text-white/55">
-                {adminRole}
+                {displayedRole}
               </span>
             </span>
           )}

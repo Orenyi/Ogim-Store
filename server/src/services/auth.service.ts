@@ -5,6 +5,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { OAuth2Client } from "google-auth-library";
 
 import User from "../models/User.js";
+import AdminRole, {
+  ADMIN_PERMISSIONS,
+  ADMIN_ROLE_COLORS,
+} from "../models/AdminRole.js";
 import RefreshSession from "../models/RefreshSession.js";
 import PasswordResetToken from "../models/PasswordResetToken.js";
 
@@ -23,6 +27,10 @@ import type {
   ResetPasswordInput,
 } from "../validators/auth.validation.js";
 
+// ============================================
+// CONSTANTS
+// ============================================
+
 const ACCESS_TOKEN_TTL = "15m";
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 
@@ -30,6 +38,39 @@ const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 
 const PASSWORD_RESET_ERROR =
   "This password reset link is invalid or has expired.";
+
+// ============================================
+// TYPES
+// ============================================
+
+export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
+
+export type AdminRoleColor = (typeof ADMIN_ROLE_COLORS)[number];
+
+export interface PublicUser {
+  id: string;
+  fullName: string;
+  email: string;
+  phoneNumber?: string;
+  role: "customer" | "admin";
+}
+
+export interface PublicAdminRole {
+  id: string;
+  name: string;
+  color: AdminRoleColor;
+  permissions: AdminPermission[];
+}
+
+export interface PublicAdminUser extends Omit<PublicUser, "role"> {
+  role: "admin";
+  adminType: "super_admin" | "staff";
+  adminRole: PublicAdminRole | null;
+}
+
+// ============================================
+// TOKEN HELPERS
+// ============================================
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -45,13 +86,9 @@ function refreshExpiry(rememberMe: boolean): Date {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
-export interface PublicUser {
-  id: string;
-  fullName: string;
-  email: string;
-  phoneNumber?: string;
-  role: "customer" | "admin";
-}
+// ============================================
+// PUBLIC USER MAPPING
+// ============================================
 
 function toPublicUser(user: {
   _id: unknown;
@@ -69,6 +106,10 @@ function toPublicUser(user: {
   };
 }
 
+// ============================================
+// ACCESS TOKEN
+// ============================================
+
 export function createAccessToken(user: {
   _id: Types.ObjectId;
   role: string;
@@ -80,6 +121,10 @@ export function createAccessToken(user: {
     audience: "ogim-store-client",
   });
 }
+
+// ============================================
+// SESSION CREATION
+// ============================================
 
 async function createSession(
   user: {
@@ -109,6 +154,10 @@ async function createSession(
     rememberMe,
   };
 }
+
+// ============================================
+// WELCOME EMAIL
+// ============================================
 
 /**
  * Sends a welcome email and records successful delivery.
@@ -151,6 +200,10 @@ async function sendWelcomeEmailSafely(
     console.error(`Welcome email delivery failed for ${email}:`, error);
   }
 }
+
+// ============================================
+// CUSTOMER REGISTRATION
+// ============================================
 
 /**
  * Register a customer with email and password.
@@ -197,6 +250,10 @@ export async function registerCustomer(
   return session;
 }
 
+// ============================================
+// CUSTOMER LOGIN
+// ============================================
+
 /**
  * Login with email and password.
  */
@@ -224,6 +281,10 @@ export async function loginCustomer(
 
   return createSession(user, userAgent, rememberMe);
 }
+
+// ============================================
+// ADMIN LOGIN
+// ============================================
 
 /**
  * Login an administrator with email and password.
@@ -260,6 +321,10 @@ export async function loginAdmin(
 
   return createSession(user, userAgent, rememberMe);
 }
+
+// ============================================
+// REFRESH TOKEN ROTATION
+// ============================================
 
 /**
  * Rotate a refresh token.
@@ -362,6 +427,10 @@ export async function rotateRefreshToken(
   };
 }
 
+// ============================================
+// REVOKE REFRESH TOKEN
+// ============================================
+
 /**
  * Revoke a specific refresh token.
  */
@@ -381,18 +450,97 @@ export async function revokeRefreshToken(refreshToken?: string) {
   );
 }
 
+// ============================================
+// CURRENT USER / ADMIN PROFILE
+// ============================================
+
 /**
  * Get the currently authenticated user.
+ *
+ * Customers receive their normal public profile.
+ *
+ * Super Admin receives the super_admin classification and
+ * does not require an assigned AdminRole.
+ *
+ * Staff administrators receive their actual assigned role
+ * and permissions from the AdminRole collection.
  */
-export async function getCurrentUser(userId: string) {
+export async function getCurrentUser(
+  userId: string,
+): Promise<PublicUser | PublicAdminUser> {
   const user = await User.findById(userId);
 
   if (!user || user.status !== "active" || user.deletedAt) {
     throw new Error("Session expired. Please sign in again.");
   }
 
-  return toPublicUser(user);
+  const publicUser = toPublicUser(user);
+
+  // Customer authentication remains unchanged.
+  if (user.role !== "admin") {
+    return publicUser;
+  }
+
+  // --------------------------------------------
+  // SUPER ADMIN
+  // --------------------------------------------
+
+  if (user.adminType === "super_admin") {
+    return {
+      ...publicUser,
+      role: "admin",
+      adminType: "super_admin",
+      adminRole: null,
+    };
+  }
+
+  // --------------------------------------------
+  // STAFF ADMIN VALIDATION
+  // --------------------------------------------
+
+  if (user.adminType !== "staff" || !user.adminRoleId) {
+    throw new Error(
+      "Administrator account has no valid assigned administrator role.",
+    );
+  }
+
+  // --------------------------------------------
+  // RETRIEVE ASSIGNED ROLE
+  // --------------------------------------------
+
+  // Keep this lookup consistent with admin-permission.middleware.ts.
+  const assignedRole = await AdminRole.findOne({
+    _id: user.adminRoleId,
+    isProtected: false,
+    key: { $ne: "administrator" },
+  })
+    .select("_id name color permissions")
+    .lean();
+
+  if (!assignedRole) {
+    throw new Error("Your assigned administrator role is unavailable.");
+  }
+
+  // --------------------------------------------
+  // RETURN STAFF ADMIN PROFILE
+  // --------------------------------------------
+
+  return {
+    ...publicUser,
+    role: "admin",
+    adminType: "staff",
+    adminRole: {
+      id: String(assignedRole._id),
+      name: assignedRole.name,
+      color: assignedRole.color as AdminRoleColor,
+      permissions: assignedRole.permissions as AdminPermission[],
+    },
+  };
 }
+
+// ============================================
+// CUSTOMER ACCOUNT DELETION
+// ============================================
 
 /**
  * Soft-delete a customer's account.
@@ -496,6 +644,10 @@ export async function deleteCustomerAccount(userId: string): Promise<void> {
   }
 }
 
+// ============================================
+// GOOGLE AUTHENTICATION
+// ============================================
+
 /**
  * Google authentication and customer onboarding.
  */
@@ -580,9 +732,9 @@ export async function loginWithGoogle(
   };
 }
 
-// ==================================================
+// ============================================
 // PASSWORD RESET
-// ==================================================
+// ============================================
 
 /**
  * Request a password-reset email.
