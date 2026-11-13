@@ -74,22 +74,11 @@ type CustomerOrderWithTracking = Record<string, unknown> & {
 };
 
 // ============================================
-// POPULATED PRODUCT CATEGORY TYPE
-// ============================================
-
-interface PopulatedProductCategory {
-  _id: mongoose.Types.ObjectId;
-  name: string;
-  status: string;
-}
-
-// ============================================
 // ORDER NUMBER
 // ============================================
 
 function generateOrderNumber(): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-
   const reference = randomBytes(4).toString("hex").toUpperCase();
 
   return `OGM-${date}-${reference}`;
@@ -242,8 +231,6 @@ async function attachCustomerTracking<
 
   const orderIds = orders.map((order) => order._id);
 
-  // Retrieve dispatch records belonging to these orders
-  // and the authenticated customer only.
   const dispatches = await DispatchModel.find({
     orderId: { $in: orderIds },
     userId,
@@ -337,7 +324,7 @@ export async function createPendingOrder(
       }
 
       // ============================================
-      // 3. FETCH CURRENT PRODUCTS AND THEIR CATEGORIES
+      // 3. FETCH CURRENT PRODUCTS
       // ============================================
 
       const productIds = input.items.map((item) => item.productId);
@@ -345,15 +332,7 @@ export async function createPendingOrder(
       const products = await ProductModel.find({
         _id: { $in: productIds },
         status: "published",
-      })
-        .populate<{
-          categoryId: PopulatedProductCategory | null;
-        }>({
-          path: "categoryId",
-          model: CategoryModel,
-          select: "name status",
-        })
-        .session(session);
+      }).session(session);
 
       const productMap = new Map(
         products.map((product) => [product._id.toString(), product]),
@@ -367,7 +346,29 @@ export async function createPendingOrder(
       }
 
       // ============================================
-      // 4. CALCULATE TOTALS AND SNAPSHOT ORDER ITEMS
+      // 4. FETCH CATEGORIES DIRECTLY
+      // ============================================
+
+      const categoryIds = [
+        ...new Set(
+          products
+            .map((product) => product.categoryId?.toString())
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+
+      const categories = await CategoryModel.find({
+        _id: { $in: categoryIds },
+      })
+        .select("_id name status")
+        .session(session);
+
+      const categoryMap = new Map(
+        categories.map((category) => [category._id.toString(), category]),
+      );
+
+      // ============================================
+      // 5. VALIDATE CATEGORIES AND SNAPSHOT ORDER ITEMS
       // ============================================
 
       let subtotal = 0;
@@ -382,11 +383,21 @@ export async function createPendingOrder(
           );
         }
 
-        const category = product.categoryId;
+        const categoryId = product.categoryId?.toString();
 
-        // Every newly purchased product must have a valid,
-        // active category before an order can be created.
+        const category = categoryId ? categoryMap.get(categoryId) : null;
+
         if (!category || category.status !== "active") {
+          console.error("Order category validation failed:", {
+            productName: product.name,
+            productId: product._id.toString(),
+            categoryId,
+            categoryFound: Boolean(category),
+            categoryStatus: category?.status ?? null,
+            databaseName: mongoose.connection.name,
+            databaseHost: mongoose.connection.host,
+          });
+
           throw new OrderServiceError(
             `${product.name} is assigned to an unavailable category. Please contact support.`,
             409,
@@ -409,7 +420,6 @@ export async function createPendingOrder(
           image: product.images[0]?.url ?? "",
 
           // Historical category snapshot.
-          // These values are saved on the order item itself.
           categoryId: category._id,
           categoryName: category.name,
 
@@ -422,7 +432,7 @@ export async function createPendingOrder(
       const total = subtotal + deliveryFee;
 
       // ============================================
-      // 5. ATOMICALLY RESERVE STOCK
+      // 6. ATOMICALLY RESERVE STOCK
       // ============================================
 
       for (const item of input.items) {
@@ -461,7 +471,7 @@ export async function createPendingOrder(
       }
 
       // ============================================
-      // 6. CREATE PENDING ORDER
+      // 7. CREATE PENDING ORDER
       // ============================================
 
       const reservationExpiresAt = new Date(
@@ -492,7 +502,7 @@ export async function createPendingOrder(
       );
 
       // ============================================
-      // 7. REMOVE PURCHASED QUANTITIES FROM CART
+      // 8. REMOVE PURCHASED QUANTITIES FROM CART
       // ============================================
 
       const remainingCartItems: RemainingCartItem[] = typedCartItems
