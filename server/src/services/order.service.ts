@@ -47,10 +47,6 @@ interface RemainingCartItem {
   priceAtAddition: number;
 }
 
-// ============================================
-// CUSTOMER TRACKING RESPONSE TYPES
-// ============================================
-
 interface CustomerFulfilmentEvent {
   id: string;
   status: string;
@@ -77,16 +73,6 @@ type CustomerOrderWithTracking = Record<string, unknown> & {
 // CATEGORY ID NORMALIZATION
 // ============================================
 
-/**
- * Extracts a valid MongoDB ObjectId string from:
- * - Native Mongoose/BSON ObjectIds.
- * - ObjectId strings.
- * - MongoDB Extended JSON objects containing $oid.
- * - Populated documents containing _id.
- * - Objects containing an id property.
- *
- * Returns null when the reference cannot be validated.
- */
 function getCategoryObjectId(value: unknown): string | null {
   if (value instanceof mongoose.Types.ObjectId) {
     return value.toHexString();
@@ -104,7 +90,6 @@ function getCategoryObjectId(value: unknown): string | null {
 
   const reference = value as Record<string, unknown>;
 
-  // Handle BSON ObjectId-like objects.
   if (typeof reference.toHexString === "function") {
     try {
       const id = (reference.toHexString as () => string).call(value);
@@ -117,19 +102,16 @@ function getCategoryObjectId(value: unknown): string | null {
     }
   }
 
-  // Handle MongoDB Extended JSON.
   if (typeof reference.$oid === "string") {
     return mongoose.isValidObjectId(reference.$oid)
       ? new mongoose.Types.ObjectId(reference.$oid).toHexString()
       : null;
   }
 
-  // Handle populated Mongoose documents.
   if (reference._id !== undefined) {
     return getCategoryObjectId(reference._id);
   }
 
-  // Handle objects with an id property.
   if (reference.id !== undefined) {
     return getCategoryObjectId(reference.id);
   }
@@ -143,6 +125,7 @@ function getCategoryObjectId(value: unknown): string | null {
 
 function generateOrderNumber(): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+
   const reference = randomBytes(4).toString("hex").toUpperCase();
 
   return `OGM-${date}-${reference}`;
@@ -359,7 +342,7 @@ export async function createPendingOrder(
       // ============================================
 
       const cartItems = new Map<string, CartItemData>(
-        typedCartItems.map((item: CartItemData) => [
+        typedCartItems.map((item) => [
           item.productId.toString(),
           {
             productId: item.productId,
@@ -388,7 +371,7 @@ export async function createPendingOrder(
       }
 
       // ============================================
-      // 3. FETCH CURRENT PRODUCTS
+      // 3. FETCH CURRENT PUBLISHED PRODUCTS
       // ============================================
 
       const productIds = input.items.map((item) => item.productId);
@@ -410,33 +393,76 @@ export async function createPendingOrder(
       }
 
       // ============================================
-      // 4. NORMALIZE AND FETCH CATEGORY REFERENCES
+      // 4. READ RAW PRODUCT CATEGORY REFERENCES
       // ============================================
 
-      const categoryIds = [
-        ...new Set(
-          products
-            .map((product) => getCategoryObjectId(product.categoryId))
-            .filter((id): id is string => id !== null),
-        ),
-      ];
+      // IMPORTANT:
+      // Do not read product.categoryId from the hydrated
+      // Mongoose product document here.
+      //
+      // Read the original MongoDB records directly.
+      // This avoids the categoryId hydration issue seen
+      // in the production Render logs.
 
-      const categories = categoryIds.length
-        ? await CategoryModel.find({
+      const rawProducts = await ProductModel.collection
+        .find(
+          {
             _id: {
-              $in: categoryIds.map((id) => new mongoose.Types.ObjectId(id)),
+              $in: productIds.map((id) => new mongoose.Types.ObjectId(id)),
             },
-          })
-            .select("_id name status")
-            .session(session)
+          },
+          {
+            session,
+            projection: {
+              _id: 1,
+              categoryId: 1,
+            },
+          },
+        )
+        .toArray();
+
+      const rawCategoryIdMap = new Map<string, string>();
+
+      for (const rawProduct of rawProducts) {
+        const categoryId = getCategoryObjectId(rawProduct.categoryId);
+
+        if (categoryId) {
+          rawCategoryIdMap.set(rawProduct._id.toString(), categoryId);
+        }
+      }
+
+      // ============================================
+      // 5. FETCH RAW CATEGORY DOCUMENTS
+      // ============================================
+
+      const categoryIds = [...new Set(rawCategoryIdMap.values())];
+
+      const rawCategories = categoryIds.length
+        ? await CategoryModel.collection
+            .find(
+              {
+                _id: {
+                  $in: categoryIds.map((id) => new mongoose.Types.ObjectId(id)),
+                },
+              },
+              {
+                session,
+                projection: {
+                  _id: 1,
+                  name: 1,
+                  status: 1,
+                },
+              },
+            )
+            .toArray()
         : [];
 
       const categoryMap = new Map(
-        categories.map((category) => [category._id.toString(), category]),
+        rawCategories.map((category) => [category._id.toString(), category]),
       );
 
       // ============================================
-      // 5. VALIDATE CATEGORIES AND SNAPSHOT ORDER ITEMS
+      // 6. VALIDATE CATEGORIES AND SNAPSHOT ORDER ITEMS
       // ============================================
 
       let subtotal = 0;
@@ -451,7 +477,7 @@ export async function createPendingOrder(
           );
         }
 
-        const categoryId = getCategoryObjectId(product.categoryId);
+        const categoryId = rawCategoryIdMap.get(product._id.toString());
 
         const category = categoryId ? categoryMap.get(categoryId) : null;
 
@@ -459,9 +485,14 @@ export async function createPendingOrder(
           console.error("Order category validation failed:", {
             productName: product.name,
             productId: product._id.toString(),
-            categoryId,
+            categoryId: categoryId ?? null,
             categoryFound: Boolean(category),
             categoryStatus: category?.status ?? null,
+            rawProductFound: rawProducts.some(
+              (rawProduct) =>
+                rawProduct._id.toString() === product._id.toString(),
+            ),
+            rawCategoryCount: rawCategories.length,
             databaseName: mongoose.connection.name,
             databaseHost: mongoose.connection.host,
           });
@@ -479,7 +510,6 @@ export async function createPendingOrder(
 
         return {
           productId: product._id,
-
           name: product.name,
           slug: product.slug,
           brand: product.brand,
@@ -487,8 +517,8 @@ export async function createPendingOrder(
           condition: product.condition,
           image: product.images[0]?.url ?? "",
 
-          // Historical category snapshot.
-          categoryId: category._id,
+          // Save a historical category snapshot.
+          categoryId: new mongoose.Types.ObjectId(categoryId),
           categoryName: category.name,
 
           quantity: item.quantity,
@@ -500,7 +530,7 @@ export async function createPendingOrder(
       const total = subtotal + deliveryFee;
 
       // ============================================
-      // 6. ATOMICALLY RESERVE STOCK
+      // 7. ATOMICALLY RESERVE STOCK
       // ============================================
 
       for (const item of input.items) {
@@ -539,7 +569,7 @@ export async function createPendingOrder(
       }
 
       // ============================================
-      // 7. CREATE PENDING ORDER
+      // 8. CREATE PENDING ORDER
       // ============================================
 
       const reservationExpiresAt = new Date(
@@ -570,7 +600,7 @@ export async function createPendingOrder(
       );
 
       // ============================================
-      // 8. REMOVE PURCHASED QUANTITIES FROM CART
+      // 9. REMOVE PURCHASED QUANTITIES FROM CART
       // ============================================
 
       const remainingCartItems: RemainingCartItem[] = typedCartItems
@@ -636,7 +666,7 @@ export async function createPendingOrder(
 }
 
 // ============================================
-// RESTORE RESERVED STOCK AND CLOSE PAYMENT ATTEMPTS
+// RESTORE RESERVED STOCK AND CLOSE PAYMENTS
 // ============================================
 
 async function restoreOrderStock(
@@ -673,7 +703,9 @@ async function restoreOrderStock(
       }
 
       if (options?.onlyIfExpired) {
-        filter.reservationExpiresAt = { $lte: new Date() };
+        filter.reservationExpiresAt = {
+          $lte: new Date(),
+        };
       }
 
       const now = new Date();
@@ -730,7 +762,7 @@ async function restoreOrderStock(
       );
 
       // ============================================
-      // 3. RESTORE RESERVED PRODUCT STOCK
+      // 3. RESTORE PRODUCT STOCK
       // ============================================
 
       for (const item of order.items) {
@@ -810,7 +842,9 @@ export async function expirePendingOrders(): Promise<number> {
     status: "pending",
     paymentStatus: "pending",
     stockRestoredAt: null,
-    reservationExpiresAt: { $lte: new Date() },
+    reservationExpiresAt: {
+      $lte: new Date(),
+    },
   })
     .select("_id")
     .sort({ reservationExpiresAt: 1 })
@@ -840,7 +874,7 @@ export async function expirePendingOrders(): Promise<number> {
 }
 
 // ============================================
-// GET ALL ORDERS FOR AN AUTHENTICATED CUSTOMER
+// GET CUSTOMER ORDERS
 // ============================================
 
 export async function getCustomerOrders(userId: string) {
@@ -856,7 +890,7 @@ export async function getCustomerOrders(userId: string) {
 }
 
 // ============================================
-// GET ONE ORDER FOR AN AUTHENTICATED CUSTOMER
+// GET ONE CUSTOMER ORDER
 // ============================================
 
 export async function getCustomerOrderById(userId: string, orderId: string) {
