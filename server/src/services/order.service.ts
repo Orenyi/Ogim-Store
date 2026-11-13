@@ -6,6 +6,7 @@ import CartModel from "../models/Cart.js";
 import ProductModel from "../models/product.model.js";
 import Payment from "../models/Payment.js";
 import DispatchModel from "../models/Dispatch.js";
+import CategoryModel from "../models/Category.js";
 
 import type { CreateOrderInput } from "../validators/order.validation.js";
 
@@ -347,7 +348,11 @@ export async function createPendingOrder(
       })
         .populate<{
           categoryId: PopulatedProductCategory | null;
-        }>("categoryId", "name status")
+        }>({
+          path: "categoryId",
+          model: CategoryModel,
+          select: "name status",
+        })
         .session(session);
 
       const productMap = new Map(
