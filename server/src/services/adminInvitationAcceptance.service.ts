@@ -27,12 +27,60 @@ export class AdminInvitationAcceptanceError extends Error {
   }
 }
 
+interface DuplicateKeyErrorLike {
+  code?: unknown;
+  keyPattern?: Record<string, unknown>;
+  keyValue?: Record<string, unknown>;
+  message?: string;
+}
+
 function hashInvitationToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
 function isValidInvitationToken(token: unknown): token is string {
   return typeof token === "string" && /^[a-f0-9]{64}$/i.test(token);
+}
+
+/**
+ * Identifies MongoDB duplicate-key errors.
+ */
+function isDuplicateKeyError(error: unknown): error is DuplicateKeyErrorLike {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as DuplicateKeyErrorLike).code === 11000
+  );
+}
+
+/**
+ * Returns an accurate user-facing message based on the unique index
+ * that caused the MongoDB duplicate-key error.
+ *
+ * Never assume every duplicate-key error means duplicate email.
+ */
+function getDuplicateKeyMessage(error: DuplicateKeyErrorLike): string {
+  const keyPattern = error.keyPattern ?? {};
+  const keyValue = error.keyValue ?? {};
+
+  const duplicatedFields = new Set([
+    ...Object.keys(keyPattern),
+    ...Object.keys(keyValue),
+  ]);
+
+  if (duplicatedFields.has("email") || error.message?.includes("email_1")) {
+    return "An account with this email address already exists. Please contact the administrator.";
+  }
+
+  if (
+    duplicatedFields.has("phoneNumber") ||
+    error.message?.includes("phoneNumber_1")
+  ) {
+    return "This phone number is already associated with another account. Please contact the administrator.";
+  }
+
+  return "Your account could not be created because one of its details conflicts with an existing record. Please contact the administrator.";
 }
 
 /**
@@ -189,8 +237,7 @@ export async function acceptStaffInvitation(input: AcceptStaffInvitationInput) {
       // Revalidate the assigned role at acceptance time.
       const role = await findEligibleRole(invitation.roleId, mongoSession);
 
-      // Check for an existing account.
-      // The unique email index remains the final concurrency safeguard.
+      // Check whether an account with this email already exists.
       const existingUser = await User.findOne({
         email: invitation.email,
       })
@@ -276,16 +323,16 @@ export async function acceptStaffInvitation(input: AcceptStaffInvitationInput) {
       throw error;
     }
 
-    // Handle MongoDB duplicate-key errors without exposing
-    // database details to the public endpoint.
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      (error as { code: number }).code === 11000
-    ) {
+    if (isDuplicateKeyError(error)) {
+      // Log the actual conflicting index fields for backend diagnosis.
+      // Do not log passwords, invitation tokens or duplicated values.
+      console.error("[Staff Invitation] MongoDB duplicate-key conflict:", {
+        keyPattern: error.keyPattern ?? null,
+        index: error.message?.match(/index:\s+([^\s]+)/)?.[1] ?? "unknown",
+      });
+
       throw new AdminInvitationAcceptanceError(
-        "An account with this email address already exists. Please contact the administrator.",
+        getDuplicateKeyMessage(error),
         409,
       );
     }

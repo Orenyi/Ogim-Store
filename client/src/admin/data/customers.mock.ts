@@ -1,4 +1,4 @@
-import type { AdminCustomer, CustomersSummary } from "../types/customers.types";
+import type { AdminCustomer } from "../types/customers.types";
 
 export const demoCustomers: AdminCustomer[] = [
   {
@@ -91,9 +91,9 @@ export const demoCustomers: AdminCustomer[] = [
   },
 ];
 
-export const demoCustomersSummary: CustomersSummary = {
-  totalCustomers: 1482,
-  newCustomers: 124,
-  customersWithOrders: 972,
-  inactiveAccounts: 28,
-};
+// export const demoCustomersSummary: CustomersSummary = {
+//   totalCustomers: 1482,
+//   newCustomers: 124,
+//   customersWithOrders: 972,
+//   inactiveAccounts: 28,
+// };

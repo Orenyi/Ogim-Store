@@ -1,10 +1,7 @@
 import { FiCopy, FiMoreHorizontal, FiTruck } from "react-icons/fi";
 
 import type { DispatchOrder } from "../../types/dispatch.types";
-import {
-  formatDispatchDate,
-  formatDispatchNaira,
-} from "../../utils/dispatch.utils";
+import { formatDispatchDate } from "../../utils/dispatch.utils";
 import DispatchStatusBadge from "./DispatchStatusBadge";
 
 type Props = {

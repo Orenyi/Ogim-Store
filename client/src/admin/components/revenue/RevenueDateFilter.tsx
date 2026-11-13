@@ -45,12 +45,6 @@ export default function RevenueDateFilter({ value, onChange }: Props) {
     setCustomOpen(false);
   }
 
-  const selectedLabel =
-    value.period === "custom"
-      ? "Custom Range"
-      : (periods.find((period) => period.value === value.period)?.label ??
-        "This Month");
-
   return (
     <div className="relative">
       <label className="flex h-11 min-w-[170px] items-center gap-2 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-white)] px-3.5">

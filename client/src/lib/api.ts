@@ -544,7 +544,7 @@ export async function apiRequest<T>(
   const canRefresh = !excludedRefreshRoutes.includes(endpoint);
 
   async function sendRequest(): Promise<Response> {
-    if (isMutation && !csrfToken) {
+    if (isMutation) {
       await getCsrfToken();
     }
 
